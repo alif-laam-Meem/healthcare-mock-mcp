@@ -24,5 +24,8 @@ yarn-error.log*
 # vercel
 .vercel
 
+# prompts (not tracked for now)
+/prompts
+
 # editor/os
 .DS_Store
