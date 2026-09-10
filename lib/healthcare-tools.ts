@@ -17,7 +17,9 @@ import {
   findDependents,
   findFormularyEntry,
   findMember,
+  findMembersByIdentifiers,
   findProvider,
+  type Member,
 } from "./demo-data";
 
 // ---------------------------------------------------------------------------
@@ -78,25 +80,63 @@ function requireMember(tool: string, memberId: string) {
   return { member };
 }
 
+function optionalTrimmed(input: Record<string, unknown>, field: string): string | undefined {
+  const value = input[field];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+// Resolves a member from any of three identifiers: memberId (authoritative,
+// looked up alone), full name (firstName + lastName together), or dob.
+// Callers may supply memberId, name, dob, or any combination — at least one
+// complete identifier is required.
+function resolveMember(tool: string, input: Record<string, unknown>): { member: Member } | { error: ToolError } {
+  const memberId = optionalTrimmed(input, "memberId");
+  const firstName = optionalTrimmed(input, "firstName");
+  const lastName = optionalTrimmed(input, "lastName");
+  const dob = optionalTrimmed(input, "dob");
+
+  const hasName = firstName !== undefined && lastName !== undefined;
+  if (!memberId && !hasName && !dob) {
+    return {
+      error: err(
+        tool,
+        "missing_required_parameter",
+        "Provide a memberId, a full name (firstName and lastName), or a date of birth (dob) to look up this member."
+      ),
+    };
+  }
+
+  const matches = findMembersByIdentifiers({ memberId, firstName, lastName, dob });
+  if (matches.length === 0) {
+    return { error: err(tool, "member_not_found", "No synthetic member matched the supplied identifiers.") };
+  }
+  if (matches.length > 1) {
+    return {
+      error: err(
+        tool,
+        "ambiguous_member_match",
+        `${matches.length} synthetic members matched the supplied identifiers. Provide an additional identifier (e.g. memberId) to narrow the match.`
+      ),
+    };
+  }
+  return { member: matches[0] };
+}
+
 // ---------------------------------------------------------------------------
 // Member and eligibility tools
 // ---------------------------------------------------------------------------
 export function getDemoMember(input: Record<string, unknown>) {
   const tool = "get_demo_member";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
-  return ok(tool, member.member);
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  return ok(tool, resolved.member);
 }
 
 export function getDemoEligibility(input: Record<string, unknown>) {
   const tool = "get_demo_eligibility";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
-  const m = member.member;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const m = resolved.member;
   return ok(tool, {
     memberId: m.memberId,
     coverageStatus: m.coverageStatus,
@@ -109,20 +149,17 @@ export function getDemoEligibility(input: Record<string, unknown>) {
 
 export function getDemoDependents(input: Record<string, unknown>) {
   const tool = "get_demo_dependents";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
-  return ok(tool, { memberId: memberId.value, dependents: findDependents(memberId.value) });
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
+  return ok(tool, { memberId, dependents: findDependents(memberId) });
 }
 
 export function getDemoPcp(input: Record<string, unknown>) {
   const tool = "get_demo_pcp";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
-  const m = member.member;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const m = resolved.member;
   if (!m.pcpProviderId) {
     return ok(tool, { memberId: m.memberId, pcpAssigned: false, pcp: null });
   }
@@ -162,10 +199,8 @@ export function searchDemoProviders(input: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 export function getDemoBenefits(input: Record<string, unknown>) {
   const tool = "get_demo_benefits";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
   const serviceType = requireString(tool, input, "serviceType");
   if ("error" in serviceType) return serviceType.error;
 
@@ -174,24 +209,21 @@ export function getDemoBenefits(input: Record<string, unknown>) {
   if (!entry) {
     return err(tool, "conflicting_demo_data", `No synthetic benefit entry for serviceType ${serviceType.value}.`);
   }
-  return ok(tool, { memberId: memberId.value, ...entry });
+  return ok(tool, { memberId: resolved.member.memberId, ...entry });
 }
 
 export function getDemoAccumulators(input: Record<string, unknown>) {
   const tool = "get_demo_accumulators";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
-  return ok(tool, findAccumulators(memberId.value));
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  return ok(tool, findAccumulators(resolved.member.memberId));
 }
 
 export function estimateDemoCost(input: Record<string, unknown>) {
   const tool = "estimate_demo_cost";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
   const serviceType = requireString(tool, input, "serviceType");
   if ("error" in serviceType) return serviceType.error;
 
@@ -200,7 +232,7 @@ export function estimateDemoCost(input: Record<string, unknown>) {
   if (!entry) {
     return err(tool, "conflicting_demo_data", `No synthetic benefit entry for serviceType ${serviceType.value}.`);
   }
-  const seed = `${memberId.value}:${serviceType.value}:${input.providerName ?? ""}:${input.location ?? ""}:${networkLevel}`;
+  const seed = `${memberId}:${serviceType.value}:${input.providerName ?? ""}:${input.location ?? ""}:${networkLevel}`;
   const baseCost = 150 + Math.round(seededFraction(seed) * 2500);
   const low = Math.round(baseCost * 0.85);
   const high = Math.round(baseCost * 1.25);
@@ -208,7 +240,7 @@ export function estimateDemoCost(input: Record<string, unknown>) {
   return ok(
     tool,
     {
-      memberId: memberId.value,
+      memberId,
       serviceType: serviceType.value,
       networkLevel,
       providerName: input.providerName ?? null,
@@ -226,12 +258,11 @@ export function estimateDemoCost(input: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 export function searchDemoClaims(input: Record<string, unknown>) {
   const tool = "search_demo_claims";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
 
-  let results = findClaimsByMember(memberId.value);
+  let results = findClaimsByMember(memberId);
   if (typeof input.serviceDate === "string" && input.serviceDate) {
     results = results.filter((c) => c.serviceDate === input.serviceDate);
   }
@@ -242,7 +273,7 @@ export function searchDemoClaims(input: Record<string, unknown>) {
   if (typeof input.status === "string" && input.status) {
     results = results.filter((c) => c.status === input.status);
   }
-  return ok(tool, { memberId: memberId.value, count: results.length, claims: results });
+  return ok(tool, { memberId, count: results.length, claims: results });
 }
 
 export function getDemoClaimDetails(input: Record<string, unknown>) {
@@ -277,10 +308,9 @@ export function getDemoEob(input: Record<string, unknown>) {
 
 export function simulateDemoAppeal(input: Record<string, unknown>) {
   const tool = "simulate_demo_appeal";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
   const claimId = requireString(tool, input, "claimId");
   if ("error" in claimId) return claimId.error;
   const reason = requireString(tool, input, "reason");
@@ -288,8 +318,8 @@ export function simulateDemoAppeal(input: Record<string, unknown>) {
 
   const claim = findClaim(claimId.value);
   if (!claim) return err(tool, "claim_not_found", `No synthetic claim matched claimId ${claimId.value}.`);
-  if (claim.memberId !== memberId.value) {
-    return err(tool, "claim_member_mismatch", `Claim ${claimId.value} does not belong to memberId ${memberId.value}.`);
+  if (claim.memberId !== memberId) {
+    return err(tool, "claim_member_mismatch", `Claim ${claimId.value} does not belong to memberId ${memberId}.`);
   }
   if (input.confirmed !== true) {
     return err(tool, "confirmation_required", "Set confirmed=true to submit this simulated appeal.");
@@ -297,7 +327,7 @@ export function simulateDemoAppeal(input: Record<string, unknown>) {
 
   const confirmationNumber = `APL-${seededFraction(`${claimId.value}:${reason.value}`).toString().slice(2, 8)}`;
   return ok(tool, {
-    memberId: memberId.value,
+    memberId,
     claimId: claimId.value,
     reason: reason.value,
     status: "submitted",
@@ -310,10 +340,8 @@ export function simulateDemoAppeal(input: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 export function getDemoFormulary(input: Record<string, unknown>) {
   const tool = "get_demo_formulary";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
   const drugName = requireString(tool, input, "drugName");
   if ("error" in drugName) return drugName.error;
 
@@ -323,15 +351,14 @@ export function getDemoFormulary(input: Record<string, unknown>) {
   if (!entry) {
     return err(tool, "drug_not_found", `No synthetic formulary entry matched drugName ${drugName.value}.`);
   }
-  return ok(tool, { memberId: memberId.value, ...entry });
+  return ok(tool, { memberId: resolved.member.memberId, ...entry });
 }
 
 export function priceDemoMedication(input: Record<string, unknown>) {
   const tool = "price_demo_medication";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
   const drugName = requireString(tool, input, "drugName");
   if ("error" in drugName) return drugName.error;
   const daysSupplyStr = requireString(tool, input, "daysSupply");
@@ -369,7 +396,7 @@ export function priceDemoMedication(input: Record<string, unknown>) {
   return ok(
     tool,
     {
-      memberId: memberId.value,
+      memberId,
       drugName: drugName.value,
       tier: entry.tier,
       daysSupply,
@@ -388,10 +415,8 @@ export function priceDemoMedication(input: Record<string, unknown>) {
 
 export function searchDemoPharmacies(input: Record<string, unknown>) {
   const tool = "search_demo_pharmacies";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
   const location = requireString(tool, input, "location");
   if ("error" in location) return location.error;
 
@@ -417,10 +442,8 @@ export function searchDemoPharmacies(input: Record<string, unknown>) {
 
 export function getDemoPrescriptionRejection(input: Record<string, unknown>) {
   const tool = "get_demo_prescription_rejection";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
   const prescriptionReference = requireString(tool, input, "prescriptionReference");
   if ("error" in prescriptionReference) return prescriptionReference.error;
 
@@ -432,7 +455,7 @@ export function getDemoPrescriptionRejection(input: Record<string, unknown>) {
       `No synthetic prescription rejection matched prescriptionReference ${prescriptionReference.value}.`
     );
   }
-  return ok(tool, { memberId: memberId.value, prescriptionReference: prescriptionReference.value, ...rejection });
+  return ok(tool, { memberId: resolved.member.memberId, prescriptionReference: prescriptionReference.value, ...rejection });
 }
 
 // ---------------------------------------------------------------------------
@@ -440,10 +463,9 @@ export function getDemoPrescriptionRejection(input: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 export function createDemoCase(input: Record<string, unknown>) {
   const tool = "create_demo_case";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
-  if ("error" in member) return member.error;
+  const resolved = resolveMember(tool, input);
+  if ("error" in resolved) return resolved.error;
+  const memberId = resolved.member.memberId;
   const category = requireString(tool, input, "category");
   if ("error" in category) return category.error;
   const summary = requireString(tool, input, "summary");
@@ -453,9 +475,9 @@ export function createDemoCase(input: Record<string, unknown>) {
     return err(tool, "confirmation_required", "Set confirmed=true to create this simulated case.");
   }
 
-  const caseNumber = `CASE-${seededFraction(`${memberId.value}:${category.value}:${summary.value}`).toString().slice(2, 8)}`;
+  const caseNumber = `CASE-${seededFraction(`${memberId}:${category.value}:${summary.value}`).toString().slice(2, 8)}`;
   return ok(tool, {
-    memberId: memberId.value,
+    memberId,
     category: category.value,
     summary: summary.value,
     status: "open",

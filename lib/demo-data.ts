@@ -326,6 +326,28 @@ export const PRESCRIPTION_REJECTIONS: Record<
 // Lookup helpers
 // ---------------------------------------------------------------------------
 export const findMember = (memberId: string) => MEMBERS.find((m) => m.memberId === memberId);
+
+export interface MemberIdentifiers {
+  memberId?: string;
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
+}
+
+// A memberId is treated as authoritative and looked up alone; otherwise
+// members are filtered by whichever of firstName/lastName/dob were supplied.
+export const findMembersByIdentifiers = ({ memberId, firstName, lastName, dob }: MemberIdentifiers): Member[] => {
+  if (memberId) {
+    const match = findMember(memberId);
+    return match ? [match] : [];
+  }
+  return MEMBERS.filter((m) => {
+    const matchesFirst = !firstName || m.firstName.toLowerCase() === firstName.toLowerCase();
+    const matchesLast = !lastName || m.lastName.toLowerCase() === lastName.toLowerCase();
+    const matchesDob = !dob || m.dob === dob;
+    return matchesFirst && matchesLast && matchesDob;
+  });
+};
 export const findDependents = (memberId: string) => DEPENDENTS.filter((d) => d.memberId === memberId);
 export const findAccumulators = (memberId: string) => ACCUMULATORS[memberId];
 export const findClaim = (claimId: string) => CLAIMS.find((c) => c.claimId === claimId);

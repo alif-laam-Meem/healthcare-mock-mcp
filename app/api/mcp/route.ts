@@ -16,33 +16,45 @@ function textResult(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data) }] };
 }
 
+// Shared identifier fields for tools that resolve a member: callers may
+// supply memberId, a full name (firstName + lastName), a dob, or any
+// combination — see resolveMember() in lib/healthcare-tools.ts.
+const memberIdentifierFields = {
+  memberId: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  dob: z.string().optional(),
+};
+const MEMBER_LOOKUP_NOTE =
+  "Identify the member by memberId, or by full name (firstName and lastName), or by dob (date of birth) — any one is enough, more narrows an ambiguous match.";
+
 const handler = createMcpHandler(
   (server) => {
   server.tool(
     "get_demo_member",
-    "Retrieves a synthetic member's basic profile and plan information. Returns fabricated demo data only.",
-    { memberId: z.string().optional() },
+    `Retrieves a synthetic member's basic profile and plan information. Returns fabricated demo data only. ${MEMBER_LOOKUP_NOTE}`,
+    memberIdentifierFields,
     async (args) => textResult(tools.getDemoMember(args))
   );
 
   server.tool(
     "get_demo_eligibility",
-    "Returns a synthetic member's coverage status, plan, effective date, termination date, and data timestamp.",
-    { memberId: z.string().optional() },
+    `Returns a synthetic member's coverage status, plan, effective date, termination date, and data timestamp. ${MEMBER_LOOKUP_NOTE}`,
+    memberIdentifierFields,
     async (args) => textResult(tools.getDemoEligibility(args))
   );
 
   server.tool(
     "get_demo_dependents",
-    "Returns a synthetic member's dependents and their coverage status.",
-    { memberId: z.string().optional() },
+    `Returns a synthetic member's dependents and their coverage status. ${MEMBER_LOOKUP_NOTE}`,
+    memberIdentifierFields,
     async (args) => textResult(tools.getDemoDependents(args))
   );
 
   server.tool(
     "get_demo_pcp",
-    "Returns a synthetic member's primary care provider assignment, or indicates that none is assigned.",
-    { memberId: z.string().optional() },
+    `Returns a synthetic member's primary care provider assignment, or indicates that none is assigned. ${MEMBER_LOOKUP_NOTE}`,
+    memberIdentifierFields,
     async (args) => textResult(tools.getDemoPcp(args))
   );
 
@@ -60,9 +72,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "get_demo_benefits",
-    "Returns synthetic benefit details for a service type: copay, coinsurance, deductible applicability, limits, exclusions, and prior authorization requirements.",
+    `Returns synthetic benefit details for a service type: copay, coinsurance, deductible applicability, limits, exclusions, and prior authorization requirements. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       serviceType: z.string().optional(),
       networkLevel: z.enum(["in_network", "out_of_network"]).optional(),
     },
@@ -71,16 +83,16 @@ const handler = createMcpHandler(
 
   server.tool(
     "get_demo_accumulators",
-    "Returns a synthetic member's individual and family deductible and out-of-pocket totals, amounts met, and remaining amounts.",
-    { memberId: z.string().optional() },
+    `Returns a synthetic member's individual and family deductible and out-of-pocket totals, amounts met, and remaining amounts. ${MEMBER_LOOKUP_NOTE}`,
+    memberIdentifierFields,
     async (args) => textResult(tools.getDemoAccumulators(args))
   );
 
   server.tool(
     "estimate_demo_cost",
-    "Provides a simulated cost range for a service, with stated assumptions and an estimate-only indicator. Not a real quote.",
+    `Provides a simulated cost range for a service, with stated assumptions and an estimate-only indicator. Not a real quote. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       serviceType: z.string().optional(),
       providerName: z.string().optional(),
       location: z.string().optional(),
@@ -91,9 +103,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "search_demo_claims",
-    "Returns synthetic claims matching a member and optional filters (service date, provider name, status).",
+    `Returns synthetic claims matching a member and optional filters (service date, provider name, status). ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       serviceDate: z.string().optional(),
       providerName: z.string().optional(),
       status: z.enum(["submitted", "processing", "paid", "denied"]).optional(),
@@ -117,9 +129,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "simulate_demo_appeal",
-    "Simulates submitting a claim appeal and returns a fictional confirmation number. Requires confirmed=true.",
+    `Simulates submitting a claim appeal and returns a fictional confirmation number. Requires confirmed=true. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       claimId: z.string().optional(),
       reason: z.string().optional(),
       confirmed: z.boolean().optional(),
@@ -129,9 +141,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "get_demo_formulary",
-    "Returns synthetic formulary coverage for a drug: tier, prior authorization, step therapy, quantity limits, and specialty requirements.",
+    `Returns synthetic formulary coverage for a drug: tier, prior authorization, step therapy, quantity limits, and specialty requirements. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       drugName: z.string().optional(),
       strength: z.string().optional(),
       form: z.string().optional(),
@@ -141,9 +153,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "price_demo_medication",
-    "Returns simulated retail, preferred, specialty, or mail-order pricing for a medication. Not a real pharmacy quote.",
+    `Returns simulated retail, preferred, specialty, or mail-order pricing for a medication. Not a real pharmacy quote. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       drugName: z.string().optional(),
       daysSupply: z.string().optional(),
       quantity: z.string().optional(),
@@ -154,9 +166,9 @@ const handler = createMcpHandler(
 
   server.tool(
     "search_demo_pharmacies",
-    "Returns synthetic pharmacies near a location with network category, mail-order availability, and simulated distance.",
+    `Returns synthetic pharmacies near a location with network category, mail-order availability, and simulated distance. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       location: z.string().optional(),
       pharmacyName: z.string().optional(),
       pharmacyType: z.enum(["retail", "mail_order", "specialty"]).optional(),
@@ -166,16 +178,16 @@ const handler = createMcpHandler(
 
   server.tool(
     "get_demo_prescription_rejection",
-    "Returns a simulated prescription rejection code, plain-language explanation, and next action.",
-    { memberId: z.string().optional(), prescriptionReference: z.string().optional() },
+    `Returns a simulated prescription rejection code, plain-language explanation, and next action. ${MEMBER_LOOKUP_NOTE}`,
+    { ...memberIdentifierFields, prescriptionReference: z.string().optional() },
     async (args) => textResult(tools.getDemoPrescriptionRejection(args))
   );
 
   server.tool(
     "create_demo_case",
-    "Simulates creating a service case and returns a fictional case number. Requires confirmed=true.",
+    `Simulates creating a service case and returns a fictional case number. Requires confirmed=true. ${MEMBER_LOOKUP_NOTE}`,
     {
-      memberId: z.string().optional(),
+      ...memberIdentifierFields,
       category: z.string().optional(),
       summary: z.string().optional(),
       confirmed: z.boolean().optional(),

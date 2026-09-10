@@ -136,7 +136,20 @@ The business logic for all 18 tools — pure functions, no HTTP concerns.
   a fallback member**: if the field isn't a non-empty string, the function
   returns before any lookup happens.
 - **`requireMember`** — wraps `findMember` from `demo-data.ts`; converts a
-  miss into `member_not_found`.
+  miss into `member_not_found`. Used only by the two tools where `memberId`
+  is a secondary, optional cross-check (`search_demo_providers`,
+  `escalate_demo_conversation`) rather than the primary lookup key.
+- **`resolveMember`** — the primary member-identification path, used by
+  every tool that needs to find *a* member before doing anything else (14
+  of the 18 tools). A caller may identify the member by `memberId`
+  (authoritative — looked up alone if present), by full name (`firstName`
+  **and** `lastName` together), by `dob`, or any combination of the three.
+  At least one complete identifier is required
+  (`missing_required_parameter` if none is given); zero matches returns
+  `member_not_found`; more than one match (possible only via name/dob,
+  since `memberId` is unique) returns `ambiguous_member_match` asking for
+  an additional identifier. See [`findMembersByIdentifiers`](#libdemo-datats)
+  below for the matching logic.
 - **`seededFraction(seed)`** — an FNV-1a-style string hash used wherever a
   tool needs a "random-looking" but **stable** derived number (a cost
   estimate, a pharmacy distance, a confirmation number). Hashing the input
@@ -173,10 +186,18 @@ mechanics.
 - `PRESCRIPTION_REJECTIONS` — a fixed lookup of 4 canned rejection
   scenarios (`RX-DEMO-0001`..`0004`) covering PA-required, refill-too-soon,
   not-covered, and quantity-limit-exceeded.
-- **Lookup helpers** at the bottom (`findMember`, `findDependents`,
-  `findAccumulators`, `findClaim`, `findClaimsByMember`, `findProvider`,
-  `findFormularyEntry`) — the only functions `healthcare-tools.ts` imports
-  from this file. Tool code never reaches into the raw arrays directly.
+- **Lookup helpers** at the bottom (`findMember`, `findMembersByIdentifiers`,
+  `findDependents`, `findAccumulators`, `findClaim`, `findClaimsByMember`,
+  `findProvider`, `findFormularyEntry`) — the only functions
+  `healthcare-tools.ts` imports from this file. Tool code never reaches into
+  the raw arrays directly. `findMembersByIdentifiers({ memberId, firstName,
+  lastName, dob })` is what backs `resolveMember` (see above): if
+  `memberId` is given it's looked up alone (authoritative, unique); otherwise
+  it filters `MEMBERS` by whichever of `firstName`/`lastName`/`dob` were
+  supplied, case-insensitively for names, and can return 0, 1, or (rarely,
+  since first/last names are assigned 1:1 per member in this fixed dataset —
+  a DOB collision is the only realistic way to get more than one match)
+  multiple matches.
 
 ### `package.json`
 Standard Next.js scripts (`dev`, `build`, `start`) plus the four runtime
@@ -277,29 +298,51 @@ call at the top of `demo-data.ts`; to get a *larger* one, change the
 
 ## The 18 tools
 
+Tools marked **member-identified** accept `memberId` **or** full name
+(`firstName` + `lastName`) **or** `dob`, in any combination — see
+[Member identification](#member-identification) below. Tools marked
+`memberId` (secondary) only use it as an optional cross-check, not a
+lookup key.
+
 | Tool | Required inputs | Purpose |
 |---|---|---|
-| `get_demo_member` | `memberId` | Synthetic member's basic profile and plan info |
-| `get_demo_eligibility` | `memberId` | Coverage status, plan, effective/termination dates |
-| `get_demo_dependents` | `memberId` | Dependents and their coverage status |
-| `get_demo_pcp` | `memberId` | PCP assignment, or "no PCP assigned" |
+| `get_demo_member` | member-identified | Synthetic member's basic profile and plan info |
+| `get_demo_eligibility` | member-identified | Coverage status, plan, effective/termination dates |
+| `get_demo_dependents` | member-identified | Dependents and their coverage status |
+| `get_demo_pcp` | member-identified | PCP assignment, or "no PCP assigned" |
 | `search_demo_providers` | `specialty`, `location` | Provider directory search + network status |
-| `get_demo_benefits` | `memberId`, `serviceType` | Copay, coinsurance, deductible, limits, exclusions, PA requirement |
-| `get_demo_accumulators` | `memberId` | Individual/family deductible & OOP totals |
-| `estimate_demo_cost` | `memberId`, `serviceType` | Simulated cost range with assumptions (estimate-only) |
-| `search_demo_claims` | `memberId` | Claims matching optional filters |
+| `get_demo_benefits` | member-identified, `serviceType` | Copay, coinsurance, deductible, limits, exclusions, PA requirement |
+| `get_demo_accumulators` | member-identified | Individual/family deductible & OOP totals |
+| `estimate_demo_cost` | member-identified, `serviceType` | Simulated cost range with assumptions (estimate-only) |
+| `search_demo_claims` | member-identified | Claims matching optional filters |
 | `get_demo_claim_details` | `claimId` | Detailed claim status, amounts, codes, history |
 | `get_demo_eob` | `claimId` | Billed/allowed/plan-paid/disallowed/member-responsibility amounts |
-| `simulate_demo_appeal` | `memberId`, `claimId`, `reason`, `confirmed` | Simulated appeal submission (requires `confirmed=true`) |
-| `get_demo_formulary` | `memberId`, `drugName` | Coverage tier, PA, step therapy, quantity limits |
-| `price_demo_medication` | `memberId`, `drugName`, `daysSupply` | Simulated pricing by pharmacy channel |
-| `search_demo_pharmacies` | `memberId`, `location` | Pharmacy search with network category & distance |
-| `get_demo_prescription_rejection` | `memberId`, `prescriptionReference` | Simulated rejection code + explanation + next action |
-| `create_demo_case` | `memberId`, `category`, `summary`, `confirmed` | Simulated case creation (requires `confirmed=true`) |
-| `escalate_demo_conversation` | `reason`, `urgency` | Simulated escalation routing |
+| `simulate_demo_appeal` | member-identified, `claimId`, `reason`, `confirmed` | Simulated appeal submission (requires `confirmed=true`) |
+| `get_demo_formulary` | member-identified, `drugName` | Coverage tier, PA, step therapy, quantity limits |
+| `price_demo_medication` | member-identified, `drugName`, `daysSupply` | Simulated pricing by pharmacy channel |
+| `search_demo_pharmacies` | member-identified, `location` | Pharmacy search with network category & distance |
+| `get_demo_prescription_rejection` | member-identified, `prescriptionReference` | Simulated rejection code + explanation + next action |
+| `create_demo_case` | member-identified, `category`, `summary`, `confirmed` | Simulated case creation (requires `confirmed=true`) |
+| `escalate_demo_conversation` | `reason`, `urgency` | Simulated escalation routing (`memberId` optional cross-check) |
 
 Full argument lists (including optional fields) are declared as Zod schemas
 in `app/api/mcp/route.ts`.
+
+### Member identification
+
+The 14 member-identified tools resolve the member from whichever of these
+arguments are supplied — **any one is enough**, and supplying more than
+one narrows a potential multi-match:
+
+- `memberId` — authoritative; if present, it's looked up alone (`M1000`–`M1019` in the seeded dataset).
+- `firstName` **and** `lastName` together (a partial name alone isn't treated as a complete identifier).
+- `dob` — `YYYY-MM-DD`, matched exactly against the synthetic member's date of birth.
+
+Providing none of the three returns `missing_required_parameter`; matching
+zero members returns `member_not_found`; matching more than one (only
+realistically possible via `dob` collision, since first/last names are
+assigned 1:1 per member in the seeded dataset) returns
+`ambiguous_member_match`.
 
 ---
 
@@ -333,8 +376,9 @@ Every tool returns one of two shapes:
 ```
 
 Error codes in use: `missing_required_parameter`, `member_not_found`,
-`claim_not_found`, `claim_member_mismatch`, `drug_not_found`,
-`prescription_not_found`, `confirmation_required`, `conflicting_demo_data`.
+`ambiguous_member_match`, `claim_not_found`, `claim_member_mismatch`,
+`drug_not_found`, `prescription_not_found`, `confirmation_required`,
+`conflicting_demo_data`.
 
 ---
 
@@ -399,7 +443,8 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/mcp" -Method Post `
   -Body '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-**Known-good IDs to try:** members `M1000`–`M1019` (`M1019` is inactive),
+**Known-good IDs to try:** members `M1000`–`M1019` (`M1019` is inactive;
+`M1000` = Jordan Alvarez, dob `1980-05-24`, so `{"firstName":"Jordan","lastName":"Alvarez"}` or `{"dob":"1980-05-24"}` alone also resolves it),
 providers `PRV2000`–`PRV2015`, claims `CLM5000`+ (only members `M1000`–`M1014`
 have claims), prescription references `RX-DEMO-0001`–`0004`, formulary drugs
 `metformin`, `semaglutide`, `adalimumab`, `experimental-compound-x` (not
@@ -457,9 +502,10 @@ or legacy SSE (only needed for clients that can't do Streamable HTTP).
   state change (`create_demo_case`, `simulate_demo_appeal`) require an
   explicit `confirmed: true` argument and return `confirmation_required`
   otherwise; even when confirmed, nothing is actually persisted.
-- **No default member.** Every tool requiring `memberId` fails with
-  `missing_required_parameter` if it's absent — the server never guesses or
-  substitutes a fallback identity.
+- **No default member.** Every member-identified tool fails with
+  `missing_required_parameter` unless it receives at least one complete
+  identifier (`memberId`, full name, or `dob`) — the server never guesses
+  or substitutes a fallback identity.
 - **Before exposing this beyond local/mock evaluation:** add an
   `Authorization` header check in `app/api/mcp/route.ts`, backed by a
   Vercel environment variable and a matching Vapi secure credential. Never
