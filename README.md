@@ -534,44 +534,101 @@ standard envelope:
 `CLM5000`+ (only `M1000`–`M1014` have claims — see the claims/benefits
 response for exact IDs per member).
 
-### Member domain — `GET /api/members/{memberId}`
+**Live deployment:** `https://healthcare-mock-mcp.vercel.app` — every
+example below works against it as-is, or swap in `http://localhost:3000`
+for a local dev server.
+
+| # | Domain | Method & path | Underlying tool function | Bundles |
+|---|---|---|---|---|
+| 1 | Member | `GET /api/members/{memberId}` | `getDemoMember` | Profile + plan |
+| 2 | Eligibility | `GET /api/eligibility/{memberId}` | `getDemoEligibility` | Coverage status + plan dates |
+| 3 | Claims & Benefits | `GET /api/claims/{memberId}` | `getDemoClaimsBenefitsProfile` | Claims history + accumulators + benefits catalog |
+| 4 | Pharmacy/PBM | `GET /api/pharmacy/{memberId}` | `getDemoPharmacyProfile` | Formulary + pharmacy directory + prescription rejections |
+
+### 1. Member domain — `GET /api/members/{memberId}`
 
 Basic profile and plan info: `memberId`, `firstName`, `lastName`, `dob`,
 `gender`, `location`, `plan`, `coverageStatus`, `pcpProviderId`.
 
 ```bash
-curl -s http://localhost:3000/api/members/M1000
+curl -s https://healthcare-mock-mcp.vercel.app/api/members/M1000
 ```
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/members/M1000" -Method Get
+Invoke-RestMethod -Uri "https://healthcare-mock-mcp.vercel.app/api/members/M1000" -Method Get
 ```
 
-Pretty-printed:
+Example response (`M1000`):
 
-```bash
-curl -s http://localhost:3000/api/members/M1000 \
-  | node -e "console.log(JSON.stringify(JSON.parse(require('fs').readFileSync(0,'utf8')), null, 2))"
+```jsonc
+{
+  "success": true,
+  "synthetic": true,
+  "tool": "get_demo_member",
+  "data": {
+    "memberId": "M1000",
+    "firstName": "Jordan",
+    "lastName": "Alvarez",
+    "dob": "1980-05-24",
+    "gender": "F",
+    "location": { "city": "Cedar Hollow", "state": "NC", "zip": "27601" },
+    "plan": {
+      "name": "Synthetic PPO Gold",
+      "type": "PPO",
+      "effectiveDate": "2026-01-01",
+      "terminationDate": null
+    },
+    "coverageStatus": "active",
+    "pcpProviderId": null
+  },
+  "asOf": "2026-09-14T00:42:46.743Z",
+  "warnings": []
+}
 ```
 
-### Eligibility domain — `GET /api/eligibility/{memberId}`
+### 2. Eligibility domain — `GET /api/eligibility/{memberId}`
 
 Coverage status, plan, effective/termination dates, and data timestamp:
 `memberId`, `coverageStatus`, `plan`, `effectiveDate`, `terminationDate`,
 `dataTimestamp`.
 
 ```bash
-curl -s http://localhost:3000/api/eligibility/M1000
+curl -s https://healthcare-mock-mcp.vercel.app/api/eligibility/M1000
 ```
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/eligibility/M1000" -Method Get
+Invoke-RestMethod -Uri "https://healthcare-mock-mcp.vercel.app/api/eligibility/M1000" -Method Get
+```
+
+Example response (`M1000`):
+
+```jsonc
+{
+  "success": true,
+  "synthetic": true,
+  "tool": "get_demo_eligibility",
+  "data": {
+    "memberId": "M1000",
+    "coverageStatus": "active",
+    "plan": {
+      "name": "Synthetic PPO Gold",
+      "type": "PPO",
+      "effectiveDate": "2026-01-01",
+      "terminationDate": null
+    },
+    "effectiveDate": "2026-01-01",
+    "terminationDate": null,
+    "dataTimestamp": "2026-09-09T00:00:00.000Z"
+  },
+  "asOf": "2026-09-14T00:42:51.422Z",
+  "warnings": []
+}
 ```
 
 Try `M1019` to see the inactive-coverage case (`coverageStatus: "inactive"`,
 a non-null `terminationDate`).
 
-### Claims & Benefits domain — `GET /api/claims/{memberId}`
+### 3. Claims & Benefits domain — `GET /api/claims/{memberId}`
 
 Bundles three related lookups for one member: their full claims history,
 their individual/family accumulators, and the entire 18-entry benefits
@@ -580,18 +637,77 @@ included for reference): `memberId`, `claims[]`, `accumulators`,
 `benefitsCatalog[]`.
 
 ```bash
-curl -s http://localhost:3000/api/claims/M1000
+curl -s https://healthcare-mock-mcp.vercel.app/api/claims/M1000
 ```
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/claims/M1000" -Method Get
+Invoke-RestMethod -Uri "https://healthcare-mock-mcp.vercel.app/api/claims/M1000" -Method Get
+```
+
+Example response (`M1000`, truncated — `claims` has 3 entries and
+`benefitsCatalog` has 18; one of each is shown):
+
+```jsonc
+{
+  "success": true,
+  "synthetic": true,
+  "tool": "get_demo_claims_benefits_profile",
+  "data": {
+    "memberId": "M1000",
+    "claims": [
+      {
+        "claimId": "CLM5000",
+        "memberId": "M1000",
+        "serviceDate": "2026-05-07",
+        "providerName": "Dr. Riley Quintero",
+        "status": "submitted",
+        "codes": { "cpt": "99214", "diagnosis": "J06.9" },
+        "billedAmount": 3992,
+        "allowedAmount": 3090,
+        "planPaidAmount": 2472,
+        "memberResponsibility": 618,
+        "processingHistory": [
+          { "date": "2026-08-01", "status": "received", "note": "Claim received from provider." },
+          { "date": "2026-08-05", "status": "processing", "note": "Under adjudication review." }
+        ]
+      }
+      // ...2 more claims (CLM5001, CLM5002)
+    ],
+    "accumulators": {
+      "memberId": "M1000",
+      "individual": {
+        "deductible": { "limit": 1500, "met": 763, "remaining": 737 },
+        "outOfPocket": { "limit": 6000, "met": 1832, "remaining": 4168 }
+      },
+      "family": {
+        "deductible": { "limit": 3000, "met": 2590, "remaining": 410 },
+        "outOfPocket": { "limit": 12000, "met": 5450, "remaining": 6550 }
+      }
+    },
+    "benefitsCatalog": [
+      {
+        "serviceType": "primary_care_visit",
+        "networkLevel": "in_network",
+        "copay": 41,
+        "coinsurance": null,
+        "deductibleApplies": false,
+        "limits": null,
+        "exclusions": [],
+        "priorAuthorizationRequired": false
+      }
+      // ...17 more entries (9 service types x 2 network levels)
+    ]
+  },
+  "asOf": "2026-09-14T00:42:51.615Z",
+  "warnings": []
+}
 ```
 
 Members `M1015`–`M1019` have zero claims (`claims: []`) — useful for
 testing empty-result handling. Members with no dependents get
 `accumulators.family: null`.
 
-### Pharmacy/PBM domain — `GET /api/pharmacy/{memberId}`
+### 4. Pharmacy/PBM domain — `GET /api/pharmacy/{memberId}`
 
 Bundles the full 10-drug formulary, the full 5-pharmacy directory, and all
 4 canned prescription-rejection scenarios. `memberId` only gates access
@@ -599,16 +715,102 @@ Bundles the full 10-drug formulary, the full 5-pharmacy directory, and all
 `memberId`, `formulary[]`, `pharmacies[]`, `prescriptionRejections`.
 
 ```bash
-curl -s http://localhost:3000/api/pharmacy/M1000
+curl -s https://healthcare-mock-mcp.vercel.app/api/pharmacy/M1000
 ```
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/pharmacy/M1000" -Method Get
+Invoke-RestMethod -Uri "https://healthcare-mock-mcp.vercel.app/api/pharmacy/M1000" -Method Get
+```
+
+Example response (`M1000`, truncated — `formulary` has 10 entries and
+`pharmacies` has 5; one of each is shown, `prescriptionRejections` is shown
+in full since it's fixed at 4 entries):
+
+```jsonc
+{
+  "success": true,
+  "synthetic": true,
+  "tool": "get_demo_pharmacy_profile",
+  "data": {
+    "memberId": "M1000",
+    "formulary": [
+      {
+        "drugName": "metformin",
+        "strength": "500mg",
+        "form": "tablet",
+        "tier": 1,
+        "priorAuthorizationRequired": false,
+        "stepTherapyRequired": false,
+        "quantityLimit": null,
+        "specialtyRequired": false,
+        "covered": true
+      }
+      // ...9 more drugs, including "experimental-compound-x" (covered: false)
+    ],
+    "pharmacies": [
+      {
+        "pharmacyId": "PHM01",
+        "name": "Corner Health Pharmacy",
+        "location": { "city": "Springvale", "state": "OH", "zip": "44001" },
+        "type": "retail",
+        "networkCategory": "preferred",
+        "mailOrderAvailable": false
+      }
+      // ...4 more pharmacies (PHM02-PHM05)
+    ],
+    "prescriptionRejections": {
+      "RX-DEMO-0001": {
+        "code": "PA_REQUIRED",
+        "explanation": "This medication requires prior authorization before it can be filled.",
+        "nextAction": "Ask the prescriber to submit a prior authorization request."
+      },
+      "RX-DEMO-0002": {
+        "code": "REFILL_TOO_SOON",
+        "explanation": "The previous fill has not reached the refill-eligible date.",
+        "nextAction": "Retry after the refill-eligible date shown on the last fill receipt."
+      },
+      "RX-DEMO-0003": {
+        "code": "NOT_COVERED",
+        "explanation": "This medication is not on the plan's covered formulary.",
+        "nextAction": "Ask the prescriber about a covered therapeutic alternative."
+      },
+      "RX-DEMO-0004": {
+        "code": "QUANTITY_LIMIT_EXCEEDED",
+        "explanation": "The requested quantity exceeds the plan's quantity limit for this drug.",
+        "nextAction": "Request a quantity within the plan limit, or a quantity-limit exception."
+      }
+    }
+  },
+  "asOf": "2026-09-14T00:42:52.370Z",
+  "warnings": []
+}
 ```
 
 `formulary` includes `experimental-compound-x` (`covered: false`) for
 testing not-covered flows. `prescriptionRejections` is keyed by reference
 (`RX-DEMO-0001`–`0004`), e.g. `prescriptionRejections["RX-DEMO-0001"].code`.
+
+### Error example — unknown memberId
+
+Every endpoint returns the same shape for a `memberId` that doesn't exist
+in the synthetic dataset:
+
+```bash
+curl -s -w "\nHTTP %{http_code}\n" https://healthcare-mock-mcp.vercel.app/api/members/M9999
+```
+
+```jsonc
+{
+  "success": false,
+  "synthetic": true,
+  "tool": "get_demo_member",
+  "error": {
+    "code": "member_not_found",
+    "message": "No synthetic member matched the supplied identifiers."
+  }
+}
+// HTTP 404
+```
 
 ### Using these with a data-validation config
 
