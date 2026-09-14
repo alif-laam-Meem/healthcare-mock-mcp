@@ -619,9 +619,9 @@ sources `member_id` (and a few optional lookup keys — `claim_id`,
 `prescription_reference`) from a test profile, and maps every field in
 every response to a JSONPath label an agent-conversation validator can
 check a stated value against (e.g. `member_coverage_status` →
-`$.data.coverageStatus`). Swap `YOUR-DEPLOYMENT.vercel.app` in its URLs
-for `localhost:3000` to run it against a local dev server, or your real
-deployment once you have one.
+`$.data.coverageStatus`). Its URLs point at the live deployment,
+`https://healthcare-mock-mcp.vercel.app` — swap that for `localhost:3000`
+to run it against a local dev server instead.
 
 ---
 

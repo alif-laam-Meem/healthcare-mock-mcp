@@ -47,7 +47,7 @@
   "endpoints": [
     {
       "name": "member_lookup",
-      "url": "https://YOUR-DEPLOYMENT.vercel.app/api/members/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/members/{{member_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -73,7 +73,7 @@
     },
     {
       "name": "eligibility_lookup",
-      "url": "https://YOUR-DEPLOYMENT.vercel.app/api/eligibility/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/eligibility/{{member_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -92,7 +92,7 @@
     },
     {
       "name": "claims_benefits_lookup",
-      "url": "https://YOUR-DEPLOYMENT.vercel.app/api/claims/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/claims/{{member_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -131,7 +131,7 @@
     },
     {
       "name": "pharmacy_lookup",
-      "url": "https://YOUR-DEPLOYMENT.vercel.app/api/pharmacy/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/pharmacy/{{member_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
