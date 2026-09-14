@@ -1,5 +1,5 @@
 {
-  "description": "Validate agent-stated synthetic member/eligibility/claims/benefits/pharmacy details against the healthcare-mock-mcp system of record",
+  "description": "Validate agent-stated synthetic member/eligibility/claims/benefits/pharmacy/provider details against the healthcare-mock-mcp system of record",
   "variables": [
     {
       "name": "member_id",
@@ -42,6 +42,12 @@
       "source": "test_profile",
       "profile_field": "prescription_reference",
       "description": "Canned prescription rejection reference (RX-DEMO-0001..0004), if discussed"
+    },
+    {
+      "name": "provider_id",
+      "source": "test_profile",
+      "profile_field": "provider_id",
+      "description": "Synthetic providerId discussed (e.g. PRV2000), if not the member's assigned PCP"
     }
   ],
   "endpoints": [
@@ -158,6 +164,35 @@
         { "label": "prescription_rejection_code", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.code", "description": "Rejection code (requires prescription_reference, e.g. RX-DEMO-0001)" },
         { "label": "prescription_rejection_explanation", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.explanation", "description": "Plain-language rejection explanation" },
         { "label": "prescription_rejection_next_action", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.nextAction", "description": "Recommended next action" }
+      ]
+    },
+    {
+      "name": "provider_lookup",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/providers/{{member_id}}",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10,
+      "expected_status": [
+        200
+      ],
+      "validation_mappings": [
+        { "label": "provider_member_id", "json_path": "$.data.memberId", "description": "Member ID" },
+        { "label": "pcp_assigned", "json_path": "$.data.pcpAssigned", "description": "Whether the member has a PCP assigned" },
+        { "label": "pcp_provider_id", "json_path": "$.data.pcp.providerId", "description": "Assigned PCP's providerId, or null if pcpAssigned is false" },
+        { "label": "pcp_name", "json_path": "$.data.pcp.name", "description": "Assigned PCP's name" },
+        { "label": "pcp_specialty", "json_path": "$.data.pcp.specialty", "description": "Assigned PCP's specialty" },
+        { "label": "pcp_network_status", "json_path": "$.data.pcp.networkStatus", "description": "Assigned PCP's network status: in_network or out_of_network" },
+        { "label": "pcp_accepting_new_patients", "json_path": "$.data.pcp.acceptingNewPatients", "description": "Whether the assigned PCP is accepting new patients" },
+        { "label": "pcp_city", "json_path": "$.data.pcp.location.city", "description": "Assigned PCP's city" },
+        { "label": "pcp_state", "json_path": "$.data.pcp.location.state", "description": "Assigned PCP's state" },
+        { "label": "pcp_zip", "json_path": "$.data.pcp.location.zip", "description": "Assigned PCP's ZIP code" },
+        { "label": "provider_name", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].name", "description": "Provider name for any discussed providerId (requires provider_id, e.g. PRV2000)" },
+        { "label": "provider_specialty", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].specialty", "description": "Specialty for the discussed provider" },
+        { "label": "provider_network_status", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].networkStatus", "description": "Network status: in_network or out_of_network" },
+        { "label": "provider_accepting_new_patients", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].acceptingNewPatients", "description": "Whether the discussed provider is accepting new patients" },
+        { "label": "provider_city", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.city", "description": "City for the discussed provider" },
+        { "label": "provider_state", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.state", "description": "State for the discussed provider" },
+        { "label": "provider_zip", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.zip", "description": "ZIP code for the discussed provider" }
       ]
     }
   ],

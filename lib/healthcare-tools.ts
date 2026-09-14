@@ -21,6 +21,7 @@ import {
   findMembersByIdentifiers,
   findProvider,
   type Member,
+  type Provider,
 } from "./demo-data";
 
 // ---------------------------------------------------------------------------
@@ -553,5 +554,27 @@ export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResu
     formulary: FORMULARY,
     pharmacies: PHARMACIES,
     prescriptionRejections: PRESCRIPTION_REJECTIONS,
+  });
+}
+
+export function getDemoProviderProfile(input: Record<string, unknown>): ToolResult<{
+  memberId: string;
+  pcpAssigned: boolean;
+  pcp: Provider | null;
+  providerDirectory: typeof PROVIDERS;
+}> {
+  const tool = "get_demo_provider_profile";
+  const memberId = requireString(tool, input, "memberId");
+  if ("error" in memberId) return memberId.error;
+  const member = requireMember(tool, memberId.value);
+  if ("error" in member) return member.error;
+
+  const pcp = member.member.pcpProviderId ? findProvider(member.member.pcpProviderId) ?? null : null;
+
+  return ok(tool, {
+    memberId: memberId.value,
+    pcpAssigned: pcp !== null,
+    pcp,
+    providerDirectory: PROVIDERS,
   });
 }
