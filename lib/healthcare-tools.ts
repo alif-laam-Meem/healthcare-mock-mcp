@@ -8,6 +8,7 @@
 import {
   DATA_AS_OF,
   BENEFITS,
+  FORMULARY,
   PHARMACIES,
   PRESCRIPTION_REJECTIONS,
   PROVIDERS,
@@ -72,7 +73,7 @@ function requireString(
   return { value };
 }
 
-function requireMember(tool: string, memberId: string) {
+function requireMember(tool: string, memberId: string): { member: Member } | { error: ToolError } {
   const member = findMember(memberId);
   if (!member) {
     return { error: err(tool, "member_not_found", `No synthetic member matched memberId ${memberId}.`) };
@@ -506,5 +507,51 @@ export function escalateDemoConversation(input: Record<string, unknown>) {
     summary: input.summary ?? null,
     destination,
     escalationId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate profile lookups (REST-only — not registered as MCP tools).
+// Each bundles every synthetic record we have for a member in one domain, for
+// callers (e.g. data-validation configs) that want the full picture in a
+// single GET rather than issuing one MCP tool call per field.
+// ---------------------------------------------------------------------------
+export function getDemoClaimsBenefitsProfile(input: Record<string, unknown>): ToolResult<{
+  memberId: string;
+  claims: ReturnType<typeof findClaimsByMember>;
+  accumulators: ReturnType<typeof findAccumulators> | null;
+  benefitsCatalog: typeof BENEFITS;
+}> {
+  const tool = "get_demo_claims_benefits_profile";
+  const memberId = requireString(tool, input, "memberId");
+  if ("error" in memberId) return memberId.error;
+  const member = requireMember(tool, memberId.value);
+  if ("error" in member) return member.error;
+
+  return ok(tool, {
+    memberId: memberId.value,
+    claims: findClaimsByMember(memberId.value),
+    accumulators: findAccumulators(memberId.value) ?? null,
+    benefitsCatalog: BENEFITS,
+  });
+}
+
+export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResult<{
+  memberId: string;
+  formulary: typeof FORMULARY;
+  pharmacies: typeof PHARMACIES;
+  prescriptionRejections: typeof PRESCRIPTION_REJECTIONS;
+}> {
+  const tool = "get_demo_pharmacy_profile";
+  const memberId = requireString(tool, input, "memberId");
+  if ("error" in memberId) return memberId.error;
+  const member = requireMember(tool, memberId.value);
+  if ("error" in member) return member.error;
+
+  return ok(tool, {
+    memberId: memberId.value,
+    formulary: FORMULARY,
+    pharmacies: PHARMACIES,
+    prescriptionRejections: PRESCRIPTION_REJECTIONS,
   });
 }

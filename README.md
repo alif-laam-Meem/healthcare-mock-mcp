@@ -3,13 +3,18 @@
 A **Model Context Protocol (MCP)** server that exposes 18 synthetic
 healthcare-administration tools over **Streamable HTTP**, built with
 Next.js App Router and [`mcp-handler`](https://www.npmjs.com/package/mcp-handler).
+It also exposes a small set of plain **REST `GET` endpoints** over the same
+underlying data, for callers that need clean JSON rather than MCP's
+JSON-RPC/SSE envelope — e.g. a [data-validation
+config](#rest-api-endpoints) that checks values an agent stated during a
+conversation against this system of record.
 
 It exists to let a voice/chat agent (e.g. [Vapi](https://vapi.ai)) rehearse
 member-service conversations — eligibility checks, benefits lookups, claims
 status, pharmacy pricing, case creation — against realistic-shaped data,
-**without touching any real PHI**. Every record returned by every tool is
-fabricated by this repo at startup; nothing is fetched from, or written to,
-a real payer, PBM, or EHR system.
+**without touching any real PHI**. Every record returned by every tool or
+endpoint is fabricated by this repo at startup; nothing is fetched from, or
+written to, a real payer, PBM, or EHR system.
 
 > ⚠️ **Not a real healthcare system.** No diagnosis, treatment, dosage
 > guidance, medication substitution, emergency dispatch, or real coverage
@@ -28,6 +33,7 @@ a real payer, PBM, or EHR system.
 - [Response envelope & error codes](#response-envelope--error-codes)
 - [Running it locally](#running-it-locally)
 - [Calling the server manually](#calling-the-server-manually)
+- [REST API endpoints](#rest-api-endpoints)
 - [Deploying to Vercel](#deploying-to-vercel)
 - [Wiring it into Vapi](#wiring-it-into-vapi)
 - [Safety model](#safety-model)
@@ -38,25 +44,31 @@ a real payer, PBM, or EHR system.
 
 ```mermaid
 flowchart TB
-    subgraph Client["MCP Client"]
+    subgraph Clients["Clients"]
         Vapi["Vapi voice agent\n(or any MCP client)"]
+        REST["REST caller\n(e.g. a data-validation config)"]
     end
 
     subgraph Server["Next.js app (Vercel)"]
         Route["app/api/mcp/route.ts\nStreamable HTTP endpoint\ncreateMcpHandler(...)"]
-        Tools["lib/healthcare-tools.ts\n18 tool handlers\n(validation + envelope)"]
+        RestRoutes["app/api/members|eligibility|claims|pharmacy/[memberId]/route.ts\nPlain GET endpoints"]
+        Tools["lib/healthcare-tools.ts\n18 MCP tool handlers +\n2 REST-only profile aggregators\n(validation + envelope)"]
         Data["lib/demo-data.ts\nSynthetic dataset\n(seeded PRNG, generated once\nat module load / cold start)"]
     end
 
     Vapi -- "POST /api/mcp\nJSON-RPC: tools/list, tools/call" --> Route
     Route -- "registers 18 Zod-validated\ntool schemas" --> Route
     Route -- "delegates each tools/call\nto the matching handler" --> Tools
+    REST -- "GET /api/{domain}/{memberId}" --> RestRoutes
+    RestRoutes -- "delegates to the matching\ntool/aggregator function" --> Tools
     Tools -- "reads/looks up\n(never mutates)" --> Data
     Tools -- "ToolSuccess | ToolError\nenvelope" --> Route
+    Tools -- "ToolSuccess | ToolError\nenvelope" --> RestRoutes
     Route -- "JSON-RPC result\n(SSE-framed)" --> Vapi
+    RestRoutes -- "plain JSON\n(200 or 404/400)" --> REST
 ```
 
-**Request flow for one tool call:**
+**Request flow for one MCP tool call:**
 
 1. The MCP client sends `POST /api/mcp` with a JSON-RPC `tools/call` message
    (`{"method":"tools/call","params":{"name":"get_demo_eligibility","arguments":{"memberId":"M1000"}}}`).
@@ -69,6 +81,13 @@ flowchart TB
    fabricates data ad hoc or falls back to a default member.
 4. `route.ts` wraps the result as MCP tool-call content and streams it back
    as a JSON-RPC response.
+
+**Request flow for one REST call** (e.g. `GET /api/claims/M1000`): the
+dynamic route resolves `memberId` from the URL, calls the matching function
+in `healthcare-tools.ts` directly (no JSON-RPC framing), and returns the same
+`ToolSuccess`/`ToolError` envelope as plain JSON — `200` on success, `404`
+for `member_not_found`, `400` for any other tool error. See
+[REST API endpoints](#rest-api-endpoints) for the full list.
 
 There is **no database and no persistence**. The dataset is generated once
 per server process (per Vercel cold start) from a fixed seed, so it's
@@ -83,11 +102,17 @@ stable within a session but does not survive a redeploy — see
 healthcare-mock-mcp/
 ├── app/
 │   └── api/
-│       └── mcp/
-│           └── route.ts        # MCP Streamable HTTP endpoint (GET/POST/DELETE)
+│       ├── mcp/
+│       │   └── route.ts                  # MCP Streamable HTTP endpoint (GET/POST/DELETE)
+│       ├── members/[memberId]/route.ts   # REST: GET member profile
+│       ├── eligibility/[memberId]/route.ts # REST: GET eligibility
+│       ├── claims/[memberId]/route.ts    # REST: GET claims + accumulators + benefits catalog
+│       └── pharmacy/[memberId]/route.ts  # REST: GET formulary + pharmacies + rx rejections
 ├── lib/
 │   ├── demo-data.ts             # Synthetic dataset + lookup helpers
-│   └── healthcare-tools.ts      # 18 tool implementations + response envelope
+│   └── healthcare-tools.ts      # 18 MCP tool implementations + 2 REST-only
+│                                 # profile aggregators + response envelope
+├── member-validation-config.json # Example data-validation config for the REST endpoints
 ├── .gitignore
 ├── next-env.d.ts                 # Auto-generated by Next.js (gitignored)
 ├── package.json
@@ -98,7 +123,7 @@ healthcare-mock-mcp/
 ## File-by-file description
 
 ### `app/api/mcp/route.ts`
-The MCP server's entry point and the only HTTP-facing file in the project.
+The MCP server's entry point.
 
 - Calls `createMcpHandler(registerFn, serverOptions, config)` from
   `mcp-handler`, which builds a single Fetch-API-compatible handler
@@ -123,8 +148,27 @@ The MCP server's entry point and the only HTTP-facing file in the project.
   should be added before this is exposed beyond local/mock evaluation (see
   [Safety model](#safety-model)).
 
+### `app/api/{members,eligibility,claims,pharmacy}/[memberId]/route.ts`
+Four plain REST `GET` endpoints, added alongside the MCP endpoint for
+callers that need clean JSON rather than MCP's JSON-RPC/SSE envelope — see
+[REST API endpoints](#rest-api-endpoints) for full examples. Each is a
+thin, near-identical wrapper:
+
+- Reads `memberId` out of the dynamic route segment (`params` is a
+  `Promise` under Next.js 15's App Router).
+- Calls exactly one function in `healthcare-tools.ts` (`getDemoMember`,
+  `getDemoEligibility`, `getDemoClaimsBenefitsProfile`, or
+  `getDemoPharmacyProfile`) — no business logic lives in the route file
+  itself.
+- Returns the function's `ToolSuccess`/`ToolError` envelope as-is via
+  `NextResponse.json(result, { status })`, mapping `member_not_found` to
+  HTTP `404`, any other tool error to `400`, and success to `200`.
+- Same synthetic-only data as the MCP tools (they share the same lookup
+  helpers in `demo-data.ts`) — nothing here is a separate data source.
+
 ### `lib/healthcare-tools.ts`
-The business logic for all 18 tools — pure functions, no HTTP concerns.
+The business logic for all 18 MCP tools, plus 2 REST-only aggregator
+functions — pure functions, no HTTP concerns.
 
 - **Envelope helpers** (`ok`, `err`) build the two response shapes every
   tool returns: `ToolSuccess<T>` (`success: true`, `data`, `asOf`,
@@ -164,6 +208,17 @@ The business logic for all 18 tools — pure functions, no HTTP concerns.
   `confirmation_required` if the caller didn't explicitly confirm. Neither
   one persists anything; "creating" a case just means returning a
   deterministically-derived case number.
+- **2 REST-only profile aggregators** (`getDemoClaimsBenefitsProfile`,
+  `getDemoPharmacyProfile`) — not registered as MCP tools, only consumed by
+  the REST routes. Each bundles several related lookups behind one
+  `memberId`-keyed call: the claims/benefits one returns a member's full
+  claims history plus their accumulators plus the entire benefits catalog;
+  the pharmacy one returns the full formulary, pharmacy directory, and all
+  4 canned prescription-rejection scenarios. Both require an explicit
+  return-type annotation (`ToolResult<...>`) rather than relying on
+  inference — see the code comment on `requireMember` for why (a real
+  `undefined`-narrowing bug was caught here once these results were first
+  checked with `.success`/`.error`, which the MCP path never did).
 
 ### `lib/demo-data.ts`
 The synthetic dataset and the only place randomness is generated. See
@@ -389,8 +444,11 @@ npm install
 npm run dev
 ```
 
-The server listens at `http://localhost:3000/api/mcp`. You can check it's
-up with:
+The server listens at `http://localhost:3000` — the MCP endpoint is at
+`/api/mcp`; the REST endpoints (see [REST API
+endpoints](#rest-api-endpoints)) are at `/api/members/{memberId}`,
+`/api/eligibility/{memberId}`, `/api/claims/{memberId}`, and
+`/api/pharmacy/{memberId}`. You can check it's up with:
 
 ```bash
 netstat -ano | grep ":3000" | grep LISTENING   # Git Bash
@@ -452,6 +510,121 @@ covered).
 
 ---
 
+## REST API endpoints
+
+Unlike `/api/mcp` (JSON-RPC over Streamable HTTP, `POST` only), these are
+plain `GET` routes on the **same** running server — open one directly in a
+browser, `curl`, or Postman, no JSON-RPC envelope or SSE framing involved.
+They read the same synthetic dataset as the MCP tools (same `demo-data.ts`,
+same seed), just returned as flat JSON.
+
+**Start the server first** (see [Running it locally](#running-it-locally)):
+
+```bash
+npm run dev
+```
+
+Every endpoint takes a `memberId` path segment and returns the tool's
+standard envelope:
+
+- Match → `HTTP 200`, `{ "success": true, "synthetic": true, "tool": "...", "data": { ... }, "asOf": "...", "warnings": [] }`
+- Unknown `memberId` → `HTTP 404`, `{ "success": false, "synthetic": true, "tool": "...", "error": { "code": "member_not_found", "message": "..." } }`
+
+**Known-good IDs:** members `M1000`–`M1019` (`M1019` is inactive); claims
+`CLM5000`+ (only `M1000`–`M1014` have claims — see the claims/benefits
+response for exact IDs per member).
+
+### Member domain — `GET /api/members/{memberId}`
+
+Basic profile and plan info: `memberId`, `firstName`, `lastName`, `dob`,
+`gender`, `location`, `plan`, `coverageStatus`, `pcpProviderId`.
+
+```bash
+curl -s http://localhost:3000/api/members/M1000
+```
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/members/M1000" -Method Get
+```
+
+Pretty-printed:
+
+```bash
+curl -s http://localhost:3000/api/members/M1000 \
+  | node -e "console.log(JSON.stringify(JSON.parse(require('fs').readFileSync(0,'utf8')), null, 2))"
+```
+
+### Eligibility domain — `GET /api/eligibility/{memberId}`
+
+Coverage status, plan, effective/termination dates, and data timestamp:
+`memberId`, `coverageStatus`, `plan`, `effectiveDate`, `terminationDate`,
+`dataTimestamp`.
+
+```bash
+curl -s http://localhost:3000/api/eligibility/M1000
+```
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/eligibility/M1000" -Method Get
+```
+
+Try `M1019` to see the inactive-coverage case (`coverageStatus: "inactive"`,
+a non-null `terminationDate`).
+
+### Claims & Benefits domain — `GET /api/claims/{memberId}`
+
+Bundles three related lookups for one member: their full claims history,
+their individual/family accumulators, and the entire 18-entry benefits
+catalog (9 service types × 2 network levels — not member-specific, but
+included for reference): `memberId`, `claims[]`, `accumulators`,
+`benefitsCatalog[]`.
+
+```bash
+curl -s http://localhost:3000/api/claims/M1000
+```
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/claims/M1000" -Method Get
+```
+
+Members `M1015`–`M1019` have zero claims (`claims: []`) — useful for
+testing empty-result handling. Members with no dependents get
+`accumulators.family: null`.
+
+### Pharmacy/PBM domain — `GET /api/pharmacy/{memberId}`
+
+Bundles the full 10-drug formulary, the full 5-pharmacy directory, and all
+4 canned prescription-rejection scenarios. `memberId` only gates access
+(must be a valid member) — the catalogs themselves aren't member-specific:
+`memberId`, `formulary[]`, `pharmacies[]`, `prescriptionRejections`.
+
+```bash
+curl -s http://localhost:3000/api/pharmacy/M1000
+```
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/pharmacy/M1000" -Method Get
+```
+
+`formulary` includes `experimental-compound-x` (`covered: false`) for
+testing not-covered flows. `prescriptionRejections` is keyed by reference
+(`RX-DEMO-0001`–`0004`), e.g. `prescriptionRejections["RX-DEMO-0001"].code`.
+
+### Using these with a data-validation config
+
+[`member-validation-config.json`](./member-validation-config.json) in the
+repo root is a worked example: it declares all four endpoints above,
+sources `member_id` (and a few optional lookup keys — `claim_id`,
+`service_type`/`network_level`, `drug_name`, `pharmacy_id`,
+`prescription_reference`) from a test profile, and maps every field in
+every response to a JSONPath label an agent-conversation validator can
+check a stated value against (e.g. `member_coverage_status` →
+`$.data.coverageStatus`). Swap `YOUR-DEPLOYMENT.vercel.app` in its URLs
+for `localhost:3000` to run it against a local dev server, or your real
+deployment once you have one.
+
+---
+
 ## Deploying to Vercel
 
 This repo has no Vercel-specific config beyond being a standard Next.js
@@ -462,10 +635,12 @@ app — `vercel.json` isn't required.
    `healthcare-mock-mcp` GitHub repo, or run `npx vercel` from this folder
    to deploy via CLI.
 3. Once deployed, your MCP endpoint is
-   `https://<your-project>.vercel.app/api/mcp`.
-4. Before sharing that URL beyond a local/mock evaluation, add the
+   `https://<your-project>.vercel.app/api/mcp`, and the REST endpoints are
+   at `https://<your-project>.vercel.app/api/{members,eligibility,claims,pharmacy}/{memberId}`.
+4. Before sharing those URLs beyond a local/mock evaluation, add the
    authorization check noted in the `TODO` at the top of
-   `app/api/mcp/route.ts` (see [Safety model](#safety-model)).
+   `app/api/mcp/route.ts` — and equivalently to the REST routes, which
+   currently carry no auth check either (see [Safety model](#safety-model)).
 
 ---
 
@@ -507,6 +682,9 @@ or legacy SSE (only needed for clients that can't do Streamable HTTP).
   identifier (`memberId`, full name, or `dob`) — the server never guesses
   or substitutes a fallback identity.
 - **Before exposing this beyond local/mock evaluation:** add an
-  `Authorization` header check in `app/api/mcp/route.ts`, backed by a
-  Vercel environment variable and a matching Vapi secure credential. Never
-  put the secret in the URL or in a tool's description string.
+  `Authorization` header check in `app/api/mcp/route.ts` **and** in each of
+  the four REST route files under `app/api/{members,eligibility,claims,pharmacy}/[memberId]/`,
+  backed by a Vercel environment variable and a matching Vapi secure
+  credential / data-validation-config header. Never put the secret in the
+  URL or in a tool's description string. None of these routes currently
+  check authorization — see the `TODO` in `app/api/mcp/route.ts`.
