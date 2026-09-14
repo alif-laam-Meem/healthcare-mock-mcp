@@ -43,6 +43,13 @@ export interface ToolError {
 }
 export type ToolResult<T> = ToolSuccess<T> | ToolError;
 
+// Shared HTTP status mapping for the REST routes (app/api/*/[memberId]/route.ts):
+// every "_not_found" error code maps to 404, everything else (missing/invalid
+// input, ambiguous match, conflicting demo data) maps to 400.
+export function restErrorStatus(code: string): number {
+  return code.endsWith("_not_found") ? 404 : 400;
+}
+
 function ok<T>(tool: string, data: T, warnings: string[] = []): ToolSuccess<T> {
   return { success: true, synthetic: true, tool, data, asOf: new Date().toISOString(), warnings };
 }
@@ -154,7 +161,17 @@ export function getDemoDependents(input: Record<string, unknown>) {
   const resolved = resolveMember(tool, input);
   if ("error" in resolved) return resolved.error;
   const memberId = resolved.member.memberId;
-  return ok(tool, { memberId, dependents: findDependents(memberId) });
+
+  let dependents = findDependents(memberId);
+  const dependentId = optionalTrimmed(input, "dependentId");
+  if (dependentId) {
+    dependents = dependents.filter((d) => d.dependentId === dependentId);
+    if (dependents.length === 0) {
+      return err(tool, "dependent_not_found", `No dependent ${dependentId} found for memberId ${memberId}.`);
+    }
+  }
+
+  return ok(tool, { memberId, dependents });
 }
 
 export function getDemoPcp(input: Record<string, unknown>) {
@@ -529,11 +546,30 @@ export function getDemoClaimsBenefitsProfile(input: Record<string, unknown>): To
   const member = requireMember(tool, memberId.value);
   if ("error" in member) return member.error;
 
+  let claims = findClaimsByMember(memberId.value);
+  const claimId = optionalTrimmed(input, "claimId");
+  if (claimId) {
+    claims = claims.filter((c) => c.claimId === claimId);
+    if (claims.length === 0) {
+      return err(tool, "claim_not_found", `No claim ${claimId} found for memberId ${memberId.value}.`);
+    }
+  }
+
+  let benefitsCatalog = BENEFITS;
+  const serviceType = optionalTrimmed(input, "serviceType");
+  if (serviceType) {
+    const networkLevel = input.networkLevel === "out_of_network" ? "out_of_network" : "in_network";
+    benefitsCatalog = BENEFITS.filter((b) => b.serviceType === serviceType && b.networkLevel === networkLevel);
+    if (benefitsCatalog.length === 0) {
+      return err(tool, "conflicting_demo_data", `No synthetic benefit entry for serviceType ${serviceType}.`);
+    }
+  }
+
   return ok(tool, {
     memberId: memberId.value,
-    claims: findClaimsByMember(memberId.value),
+    claims,
     accumulators: findAccumulators(memberId.value) ?? null,
-    benefitsCatalog: BENEFITS,
+    benefitsCatalog,
   });
 }
 
@@ -541,7 +577,7 @@ export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResu
   memberId: string;
   formulary: typeof FORMULARY;
   pharmacies: typeof PHARMACIES;
-  prescriptionRejections: typeof PRESCRIPTION_REJECTIONS;
+  prescriptionRejections: { reference: string; code: string; explanation: string; nextAction: string }[];
 }> {
   const tool = "get_demo_pharmacy_profile";
   const memberId = requireString(tool, input, "memberId");
@@ -549,11 +585,47 @@ export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResu
   const member = requireMember(tool, memberId.value);
   if ("error" in member) return member.error;
 
+  let formulary = FORMULARY;
+  const drugName = optionalTrimmed(input, "drugName");
+  if (drugName) {
+    formulary = FORMULARY.filter((f) => f.drugName.toLowerCase() === drugName.toLowerCase());
+    if (formulary.length === 0) {
+      return err(tool, "drug_not_found", `No synthetic formulary entry matched drugName ${drugName}.`);
+    }
+  }
+
+  let pharmacies = PHARMACIES;
+  const pharmacyId = optionalTrimmed(input, "pharmacyId");
+  if (pharmacyId) {
+    // No not-found error here, mirroring search_demo_pharmacies, which
+    // returns an empty results list rather than erroring on zero matches.
+    pharmacies = PHARMACIES.filter((p) => p.pharmacyId === pharmacyId);
+  }
+
+  // Exposed as an array (not the underlying keyed-by-reference Record) so
+  // that, like every other catalog here, a filtered result is always
+  // index-0-addressable — no dynamic key name needed in a consumer's path.
+  let prescriptionRejections = Object.entries(PRESCRIPTION_REJECTIONS).map(([reference, entry]) => ({
+    reference,
+    ...entry,
+  }));
+  const prescriptionReference = optionalTrimmed(input, "prescriptionReference");
+  if (prescriptionReference) {
+    prescriptionRejections = prescriptionRejections.filter((r) => r.reference === prescriptionReference);
+    if (prescriptionRejections.length === 0) {
+      return err(
+        tool,
+        "prescription_not_found",
+        `No synthetic prescription rejection matched prescriptionReference ${prescriptionReference}.`
+      );
+    }
+  }
+
   return ok(tool, {
     memberId: memberId.value,
-    formulary: FORMULARY,
-    pharmacies: PHARMACIES,
-    prescriptionRejections: PRESCRIPTION_REJECTIONS,
+    formulary,
+    pharmacies,
+    prescriptionRejections,
   });
 }
 
@@ -571,10 +643,19 @@ export function getDemoProviderProfile(input: Record<string, unknown>): ToolResu
 
   const pcp = member.member.pcpProviderId ? findProvider(member.member.pcpProviderId) ?? null : null;
 
+  let providerDirectory = PROVIDERS;
+  const providerId = optionalTrimmed(input, "providerId");
+  if (providerId) {
+    providerDirectory = PROVIDERS.filter((p) => p.providerId === providerId);
+    if (providerDirectory.length === 0) {
+      return err(tool, "provider_not_found", `No synthetic provider matched providerId ${providerId}.`);
+    }
+  }
+
   return ok(tool, {
     memberId: memberId.value,
     pcpAssigned: pcp !== null,
     pcp,
-    providerDirectory: PROVIDERS,
+    providerDirectory,
   });
 }

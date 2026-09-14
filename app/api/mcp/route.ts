@@ -46,8 +46,8 @@ const handler = createMcpHandler(
 
   server.tool(
     "get_demo_dependents",
-    `Returns a synthetic member's dependents and their coverage status. ${MEMBER_LOOKUP_NOTE}`,
-    memberIdentifierFields,
+    `Returns a synthetic member's dependents and their coverage status. Optionally narrow to one dependent with dependentId. ${MEMBER_LOOKUP_NOTE}`,
+    { ...memberIdentifierFields, dependentId: z.string().optional() },
     async (args) => textResult(tools.getDemoDependents(args))
   );
 

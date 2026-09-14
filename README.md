@@ -157,7 +157,11 @@ callers that need clean JSON rather than MCP's JSON-RPC/SSE envelope — see
 thin, near-identical wrapper:
 
 - Reads `memberId` out of the dynamic route segment (`params` is a
-  `Promise` under Next.js 15's App Router).
+  `Promise` under Next.js 15's App Router), and — for the four "bundle"
+  routes (dependents, claims, pharmacy, providers) — spreads every query
+  param (`req.nextUrl.searchParams`, via `Object.fromEntries`) into the
+  same call. Any new optional filter a tool function starts reading just
+  works from the URL automatically; no route file changes needed.
 - Calls exactly one function in `healthcare-tools.ts` (`getDemoMember`,
   `getDemoEligibility`, `getDemoDependents`, `getDemoClaimsBenefitsProfile`,
   `getDemoPharmacyProfile`, or `getDemoProviderProfile`) — no business
@@ -165,8 +169,11 @@ thin, near-identical wrapper:
   case reusing an existing MCP tool function directly rather than a
   REST-only aggregator, since it already returns exactly the shape needed.
 - Returns the function's `ToolSuccess`/`ToolError` envelope as-is via
-  `NextResponse.json(result, { status })`, mapping `member_not_found` to
-  HTTP `404`, any other tool error to `400`, and success to `200`.
+  `NextResponse.json(result, { status: restErrorStatus(result.error.code) })`
+  on failure (every `*_not_found` code → `404`, everything else → `400`) or
+  `200` on success. `restErrorStatus` is a small shared helper exported
+  from `healthcare-tools.ts` so this mapping stays consistent as new error
+  codes get added, instead of being re-implemented per route.
 - Same synthetic-only data as the MCP tools (they share the same lookup
   helpers in `demo-data.ts`) — nothing here is a separate data source.
 
@@ -226,6 +233,34 @@ functions — pure functions, no HTTP concerns.
   inference — see the code comment on `requireMember` for why (a real
   `undefined`-narrowing bug was caught here once these results were first
   checked with `.success`/`.error`, which the MCP path never did).
+- **Optional narrowing filters** on the four "bundle" functions
+  (`getDemoDependents`, `getDemoClaimsBenefitsProfile`,
+  `getDemoPharmacyProfile`, `getDemoProviderProfile`) — each accepts extra
+  optional `input` fields (`dependentId`, `claimId`/`serviceType`/
+  `networkLevel`, `drugName`/`pharmacyId`/`prescriptionReference`,
+  `providerId`) that narrow the matching array/list field down to 0-or-1
+  entries, mirroring how the single-record MCP tools (`get_demo_claim_details`,
+  `get_demo_formulary`, etc.) take an ID as an argument and filter
+  server-side rather than making the caller filter a full response
+  client-side. `getDemoDependents` is shared with the `get_demo_dependents`
+  MCP tool, so that tool gained `dependentId` too; the other three are
+  REST-only, so their filters are REST-only. Each filter independently
+  returns a domain-specific `*_not_found` error (via `err(...)`) when the
+  ID doesn't match, except `pharmacyId`, which returns an empty list — no
+  error — mirroring `search_demo_pharmacies`'s existing zero-match
+  behavior.
+- **`restErrorStatus(code)`** — maps a `ToolError.error.code` to an HTTP
+  status for the REST routes: any code ending in `_not_found` → `404`,
+  everything else → `400`. Centralizing this means a new `_not_found` code
+  (like the `dependent_not_found`/`provider_not_found` added alongside the
+  filters above) automatically gets the right status everywhere, without
+  touching route files.
+- **`prescriptionRejections` is exposed as an array**, not the underlying
+  `PRESCRIPTION_REJECTIONS` `Record<string, ...>` — `getDemoPharmacyProfile`
+  maps it to `{ reference, code, explanation, nextAction }[]`. This keeps
+  it consistent with every other catalog here (array, filterable, always
+  `[0]`-addressable after filtering) instead of being the one field whose
+  filtered result would need a *dynamic* object key.
 
 ### `lib/demo-data.ts`
 The synthetic dataset and the only place randomness is generated. See
@@ -440,7 +475,10 @@ Every tool returns one of two shapes:
 Error codes in use: `missing_required_parameter`, `member_not_found`,
 `ambiguous_member_match`, `claim_not_found`, `claim_member_mismatch`,
 `drug_not_found`, `prescription_not_found`, `confirmation_required`,
-`conflicting_demo_data`.
+`conflicting_demo_data`, `dependent_not_found` (REST-only, from the
+`dependentId`/`?dependentId=` filter — see [REST API
+endpoints](#rest-api-endpoints)), `provider_not_found` (REST-only, from
+the `?providerId=` filter).
 
 ---
 
@@ -538,6 +576,20 @@ standard envelope:
 - Match → `HTTP 200`, `{ "success": true, "synthetic": true, "tool": "...", "data": { ... }, "asOf": "...", "warnings": [] }`
 - Unknown `memberId` → `HTTP 404`, `{ "success": false, "synthetic": true, "tool": "...", "error": { "code": "member_not_found", "message": "..." } }`
 
+**Optional server-side filtering.** The four "bundle" endpoints (dependents,
+claims, pharmacy, providers) return every record for the member by default,
+but each also accepts optional query params that narrow one field down to a
+single matching record — mirroring how the corresponding MCP tool takes
+that same ID as an argument and does the lookup server-side, rather than
+returning everything and expecting the caller to filter it out
+client-side. A filtered response keeps the same shape (still an array/list
+field), just with 0-or-1 items, so `[0]` always addresses "the requested
+record, or the first one if no filter was given." An unmatched ID on most
+filters returns `404` with a dedicated `_not_found` error code (exception:
+`?pharmacyId=` mirrors `search_demo_pharmacies` and returns an empty list
+instead of erroring). See each domain section below for its specific
+params.
+
 **Known-good IDs:** members `M1000`–`M1019` (`M1019` is inactive); claims
 `CLM5000`+ (only `M1000`–`M1014` have claims — see the claims/benefits
 response for exact IDs per member).
@@ -546,14 +598,14 @@ response for exact IDs per member).
 example below works against it as-is, or swap in `http://localhost:3000`
 for a local dev server.
 
-| # | Domain | Method & path | Underlying tool function | Bundles |
-|---|---|---|---|---|
-| 1 | Member | `GET /api/members/{memberId}` | `getDemoMember` | Profile + plan |
-| 2 | Eligibility | `GET /api/eligibility/{memberId}` | `getDemoEligibility` | Coverage status + plan dates |
-| 3 | Dependents | `GET /api/dependents/{memberId}` | `getDemoDependents` | Spouse/child records + their coverage status |
-| 4 | Claims & Benefits | `GET /api/claims/{memberId}` | `getDemoClaimsBenefitsProfile` | Claims history + accumulators + benefits catalog |
-| 5 | Pharmacy/PBM | `GET /api/pharmacy/{memberId}` | `getDemoPharmacyProfile` | Formulary + pharmacy directory + prescription rejections |
-| 6 | Providers | `GET /api/providers/{memberId}` | `getDemoProviderProfile` | PCP assignment (resolved to full provider record) + provider directory |
+| # | Domain | Method & path | Underlying tool function | Bundles | Optional filter query params |
+|---|---|---|---|---|---|
+| 1 | Member | `GET /api/members/{memberId}` | `getDemoMember` | Profile + plan | — (already a single record) |
+| 2 | Eligibility | `GET /api/eligibility/{memberId}` | `getDemoEligibility` | Coverage status + plan dates | — (already a single record) |
+| 3 | Dependents | `GET /api/dependents/{memberId}` | `getDemoDependents` | Spouse/child records + their coverage status | `dependentId` |
+| 4 | Claims & Benefits | `GET /api/claims/{memberId}` | `getDemoClaimsBenefitsProfile` | Claims history + accumulators + benefits catalog | `claimId`; `serviceType` (+ optional `networkLevel`, defaults to `in_network`) |
+| 5 | Pharmacy/PBM | `GET /api/pharmacy/{memberId}` | `getDemoPharmacyProfile` | Formulary + pharmacy directory + prescription rejections | `drugName`; `pharmacyId`; `prescriptionReference` |
+| 6 | Providers | `GET /api/providers/{memberId}` | `getDemoProviderProfile` | PCP assignment (resolved to full provider record) + provider directory | `providerId` |
 
 ### 1. Member domain — `GET /api/members/{memberId}`
 
@@ -644,6 +696,10 @@ A member's spouse/child records and their coverage status: `memberId`,
 `dependents[]` (each with `dependentId`, `memberId`, `name`,
 `relationship`, `dob`, `coverageStatus`).
 
+**Optional query param:** `dependentId` — narrows `dependents[]` to the one
+matching entry. `404 dependent_not_found` if it doesn't belong to this
+member. E.g. `?dependentId=M1000-D2`.
+
 ```bash
 curl -s https://healthcare-mock-mcp.vercel.app/api/dependents/M1000
 ```
@@ -703,6 +759,12 @@ their individual/family accumulators, and the entire 18-entry benefits
 catalog (9 service types × 2 network levels — not member-specific, but
 included for reference): `memberId`, `claims[]`, `accumulators`,
 `benefitsCatalog[]`.
+
+**Optional query params** (independent — combine freely in one request):
+- `claimId` — narrows `claims[]` to the one matching entry. `404 claim_not_found` if it doesn't belong to this member.
+- `serviceType` (+ optional `networkLevel`, defaults to `in_network`) — narrows `benefitsCatalog[]` to the one matching entry. `400 conflicting_demo_data` if no such entry exists.
+
+E.g. `?claimId=CLM5031&serviceType=imaging&networkLevel=out_of_network`.
 
 ```bash
 curl -s https://healthcare-mock-mcp.vercel.app/api/claims/M1000
@@ -780,7 +842,14 @@ testing empty-result handling. Members with no dependents get
 Bundles the full 10-drug formulary, the full 5-pharmacy directory, and all
 4 canned prescription-rejection scenarios. `memberId` only gates access
 (must be a valid member) — the catalogs themselves aren't member-specific:
-`memberId`, `formulary[]`, `pharmacies[]`, `prescriptionRejections`.
+`memberId`, `formulary[]`, `pharmacies[]`, `prescriptionRejections[]`.
+
+**Optional query params** (independent — combine freely in one request):
+- `drugName` — narrows `formulary[]` to the one matching entry. `404 drug_not_found` if it doesn't exist.
+- `pharmacyId` — narrows `pharmacies[]` to the one matching entry. No error on zero matches (returns `pharmacies: []`), mirroring `search_demo_pharmacies`.
+- `prescriptionReference` — narrows `prescriptionRejections[]` to the one matching entry. `404 prescription_not_found` if it isn't one of the canned references (`RX-DEMO-0001`–`0004`).
+
+E.g. `?drugName=lisinopril&pharmacyId=PHM03`.
 
 ```bash
 curl -s https://healthcare-mock-mcp.vercel.app/api/pharmacy/M1000
@@ -790,9 +859,9 @@ curl -s https://healthcare-mock-mcp.vercel.app/api/pharmacy/M1000
 Invoke-RestMethod -Uri "https://healthcare-mock-mcp.vercel.app/api/pharmacy/M1000" -Method Get
 ```
 
-Example response (`M1000`, truncated — `formulary` has 10 entries and
-`pharmacies` has 5; one of each is shown, `prescriptionRejections` is shown
-in full since it's fixed at 4 entries):
+Example response (`M1000`, truncated — `formulary` has 10 entries,
+`pharmacies` has 5, and `prescriptionRejections` has 4; one of each is
+shown):
 
 ```jsonc
 {
@@ -826,28 +895,15 @@ in full since it's fixed at 4 entries):
       }
       // ...4 more pharmacies (PHM02-PHM05)
     ],
-    "prescriptionRejections": {
-      "RX-DEMO-0001": {
+    "prescriptionRejections": [
+      {
+        "reference": "RX-DEMO-0001",
         "code": "PA_REQUIRED",
         "explanation": "This medication requires prior authorization before it can be filled.",
         "nextAction": "Ask the prescriber to submit a prior authorization request."
-      },
-      "RX-DEMO-0002": {
-        "code": "REFILL_TOO_SOON",
-        "explanation": "The previous fill has not reached the refill-eligible date.",
-        "nextAction": "Retry after the refill-eligible date shown on the last fill receipt."
-      },
-      "RX-DEMO-0003": {
-        "code": "NOT_COVERED",
-        "explanation": "This medication is not on the plan's covered formulary.",
-        "nextAction": "Ask the prescriber about a covered therapeutic alternative."
-      },
-      "RX-DEMO-0004": {
-        "code": "QUANTITY_LIMIT_EXCEEDED",
-        "explanation": "The requested quantity exceeds the plan's quantity limit for this drug.",
-        "nextAction": "Request a quantity within the plan limit, or a quantity-limit exception."
       }
-    }
+      // ...3 more (RX-DEMO-0002, -0003, -0004)
+    ]
   },
   "asOf": "2026-09-14T00:42:52.370Z",
   "warnings": []
@@ -855,8 +911,11 @@ in full since it's fixed at 4 entries):
 ```
 
 `formulary` includes `experimental-compound-x` (`covered: false`) for
-testing not-covered flows. `prescriptionRejections` is keyed by reference
-(`RX-DEMO-0001`–`0004`), e.g. `prescriptionRejections["RX-DEMO-0001"].code`.
+testing not-covered flows. `prescriptionRejections` is an **array** (each
+entry carries its own `reference` field), not an object keyed by
+reference — this keeps it consistent with every other catalog here and
+lets a filtered result always be addressed at `[0]` regardless of which
+reference was requested.
 
 ### 6. Providers domain — `GET /api/providers/{memberId}`
 
@@ -864,6 +923,11 @@ Resolves the member's `pcpProviderId` to the actual provider record — the
 member and eligibility responses only expose the bare ID — plus the full
 16-provider directory: `memberId`, `pcpAssigned`, `pcp` (`null` if
 unassigned), `providerDirectory[]`.
+
+**Optional query param:** `providerId` — narrows `providerDirectory[]` to
+the one matching entry (independent of the member's own `pcp`, which is
+never filtered). `404 provider_not_found` if it doesn't exist. E.g.
+`?providerId=PRV2005`.
 
 ```bash
 curl -s https://healthcare-mock-mcp.vercel.app/api/providers/M1001
@@ -938,19 +1002,33 @@ curl -s -w "\nHTTP %{http_code}\n" https://healthcare-mock-mcp.vercel.app/api/me
 ### Using these with a data-validation config
 
 [`member-validation-config.json`](./member-validation-config.json) in the
-repo root is a worked example: it declares all six endpoints above,
-sources `member_id` (and a few optional lookup keys — `claim_id`,
-`service_type`/`network_level`, `drug_name`, `pharmacy_id`,
-`prescription_reference`) from a test profile, and maps every field in
-every response to a JSONPath label an agent-conversation validator can
-check a stated value against (e.g. `member_coverage_status` →
-`$.data.coverageStatus`). The `provider_lookup` endpoint only validates
-`pcp_*` fields (drawn from `$.data.pcp`) — it doesn't map
-`providerDirectory` entries individually, since the directory is a
-16-provider reference catalog, not something a conversation is expected to
-state values about beyond the member's own assigned PCP. Its URLs point at
-the live deployment, `https://healthcare-mock-mcp.vercel.app` — swap that
-for `localhost:3000` to run it against a local dev server instead.
+repo root is a worked example. It declares all six endpoints above,
+sourcing `member_id` plus one optional lookup key per filterable field
+(`dependent_id`, `claim_id`, `service_type`/`network_level`, `drug_name`,
+`pharmacy_id`, `prescription_reference`, `provider_id`) from a test
+profile, and passes each of those straight through as a **query param** on
+the matching endpoint's `url` (e.g.
+`.../api/claims/{{member_id}}?claimId={{claim_id}}&serviceType={{service_type}}&networkLevel={{network_level}}`).
+Every `json_path` then reads a fixed index (`[0]`, plus `[1]`/`[2]` for
+dependents/claims, since a member can have more than one) rather than a
+JSONPath filter predicate — the server does the narrowing, not the
+validator.
+
+This design exists because JSONPath `?()` filter expressions
+(`$.data.claims[?(@.claimId=='...')]`) turned out not to work against this
+particular validation tool — its own documented examples were all plain
+paths/indices, never filters, and testing confirmed filter predicates
+silently match nothing. Query-param filtering sidesteps that entirely: it
+mirrors how the MCP tools already take an ID as an *argument* and do the
+lookup server-side, so the REST layer now does the same, and the validator
+only ever needs the simple path forms it's confirmed to support. Leaving a
+lookup key unset in the test profile (e.g. no `claim_id`) makes the
+endpoint fall back to returning every record unfiltered, so `[0]`/`[1]`
+still resolve to *something* meaningful — the first claim, first
+dependent, the default drug (metformin), etc. — each documented in that
+variable's `description` in the config. Its URLs point at the live
+deployment, `https://healthcare-mock-mcp.vercel.app` — swap that for
+`localhost:3000` to run it against a local dev server instead.
 
 ---
 

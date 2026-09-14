@@ -8,46 +8,52 @@
       "description": "Synthetic memberId (M1000-M1019) driving the conversation"
     },
     {
+      "name": "dependent_id",
+      "source": "test_profile",
+      "profile_field": "dependent_id",
+      "description": "Synthetic dependentId discussed (e.g. M1000-D1), if any. Leave unset to validate all of the member's dependents instead of one specific one."
+    },
+    {
       "name": "claim_id",
       "source": "test_profile",
       "profile_field": "claim_id",
-      "description": "Synthetic claimId (e.g. CLM5000) the conversation is discussing, if any"
+      "description": "Synthetic claimId (e.g. CLM5000) discussed, if any. Leave unset to validate all of the member's claims instead of one specific one."
     },
     {
       "name": "service_type",
       "source": "test_profile",
       "profile_field": "service_type",
-      "description": "Benefit service type discussed (e.g. primary_care_visit, emergency_room, imaging)"
+      "description": "Benefit service type discussed (e.g. primary_care_visit, emergency_room, imaging). Leave unset to default to primary_care_visit."
     },
     {
       "name": "network_level",
       "source": "test_profile",
       "profile_field": "network_level",
-      "description": "Network level for the benefit lookup: in_network or out_of_network"
+      "description": "Network level for the benefit lookup: in_network or out_of_network. Leave unset to default to in_network."
     },
     {
       "name": "drug_name",
       "source": "test_profile",
       "profile_field": "drug_name",
-      "description": "Formulary drug name discussed (e.g. metformin, semaglutide)"
+      "description": "Formulary drug name discussed (e.g. lisinopril, semaglutide). Leave unset to default to metformin (the first formulary entry)."
     },
     {
       "name": "pharmacy_id",
       "source": "test_profile",
       "profile_field": "pharmacy_id",
-      "description": "Synthetic pharmacyId discussed (e.g. PHM01)"
+      "description": "Synthetic pharmacyId discussed (e.g. PHM03). Leave unset to default to PHM01 (the first pharmacy entry)."
     },
     {
       "name": "prescription_reference",
       "source": "test_profile",
       "profile_field": "prescription_reference",
-      "description": "Canned prescription rejection reference (RX-DEMO-0001..0004), if discussed"
+      "description": "Canned prescription rejection reference (RX-DEMO-0001..0004) discussed. Leave unset to default to RX-DEMO-0001."
     },
     {
-      "name": "dependent_id",
+      "name": "provider_id",
       "source": "test_profile",
-      "profile_field": "dependent_id",
-      "description": "Synthetic dependentId discussed (e.g. M1000-D1), if any"
+      "profile_field": "provider_id",
+      "description": "Synthetic providerId discussed (e.g. PRV2005), if not the member's assigned PCP. Leave unset to default to PRV2000 (the first directory entry)."
     }
   ],
   "endpoints": [
@@ -182,7 +188,7 @@
     },
     {
       "name": "dependents_lookup",
-      "url": "https://healthcare-mock-mcp.vercel.app/api/dependents/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/dependents/{{member_id}}?dependentId={{dependent_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -196,30 +202,60 @@
           "description": "Member ID"
         },
         {
-          "label": "dependent_name",
-          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].name",
-          "description": "Dependent's name for the discussed dependentId (requires dependent_id, e.g. M1000-D1)"
+          "label": "dependent_1_id",
+          "json_path": "$.data.dependents[0].dependentId",
+          "description": "dependentId of the discussed dependent (if dependent_id was set) or the member's first dependent (if not) — server-side filtered via the dependentId query param, 404 dependent_not_found if dependent_id doesn't belong to this member"
         },
         {
-          "label": "dependent_relationship",
-          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].relationship",
+          "label": "dependent_1_name",
+          "json_path": "$.data.dependents[0].name",
+          "description": "Name of the discussed/first dependent"
+        },
+        {
+          "label": "dependent_1_relationship",
+          "json_path": "$.data.dependents[0].relationship",
           "description": "Relationship to the member: spouse or child"
         },
         {
-          "label": "dependent_dob",
-          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].dob",
-          "description": "Dependent's date of birth (YYYY-MM-DD)"
+          "label": "dependent_1_dob",
+          "json_path": "$.data.dependents[0].dob",
+          "description": "Date of birth (YYYY-MM-DD) of the discussed/first dependent"
         },
         {
-          "label": "dependent_coverage_status",
-          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].coverageStatus",
-          "description": "Dependent's coverage status: active or inactive"
+          "label": "dependent_1_coverage_status",
+          "json_path": "$.data.dependents[0].coverageStatus",
+          "description": "Coverage status of the discussed/first dependent: active or inactive"
+        },
+        {
+          "label": "dependent_2_id",
+          "json_path": "$.data.dependents[1].dependentId",
+          "description": "Second dependent's dependentId — only present when dependent_id is unset AND the member has 2 dependents (M1000, M1005, M1010, M1015)"
+        },
+        {
+          "label": "dependent_2_name",
+          "json_path": "$.data.dependents[1].name",
+          "description": "Second dependent's name"
+        },
+        {
+          "label": "dependent_2_relationship",
+          "json_path": "$.data.dependents[1].relationship",
+          "description": "Second dependent's relationship to the member: spouse or child"
+        },
+        {
+          "label": "dependent_2_dob",
+          "json_path": "$.data.dependents[1].dob",
+          "description": "Second dependent's date of birth (YYYY-MM-DD)"
+        },
+        {
+          "label": "dependent_2_coverage_status",
+          "json_path": "$.data.dependents[1].coverageStatus",
+          "description": "Second dependent's coverage status: active or inactive"
         }
       ]
     },
     {
       "name": "claims_benefits_lookup",
-      "url": "https://healthcare-mock-mcp.vercel.app/api/claims/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/claims/{{member_id}}?claimId={{claim_id}}&serviceType={{service_type}}&networkLevel={{network_level}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -293,80 +329,185 @@
           "description": "Family out-of-pocket amount remaining"
         },
         {
-          "label": "claim_service_date",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].serviceDate",
-          "description": "Service date for the discussed claim (requires claim_id)"
+          "label": "claim_1_id",
+          "json_path": "$.data.claims[0].claimId",
+          "description": "claimId of the discussed claim (if claim_id was set) or the member's first claim (if not) — server-side filtered via the claimId query param, 404 claim_not_found if claim_id doesn't belong to this member"
         },
         {
-          "label": "claim_provider_name",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].providerName",
-          "description": "Provider name for the discussed claim"
+          "label": "claim_1_service_date",
+          "json_path": "$.data.claims[0].serviceDate",
+          "description": "Service date of the discussed/first claim"
         },
         {
-          "label": "claim_status",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].status",
-          "description": "Status: submitted, processing, paid, or denied"
+          "label": "claim_1_provider_name",
+          "json_path": "$.data.claims[0].providerName",
+          "description": "Provider name for the discussed/first claim"
         },
         {
-          "label": "claim_cpt_code",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.cpt",
-          "description": "CPT procedure code for the discussed claim"
+          "label": "claim_1_status",
+          "json_path": "$.data.claims[0].status",
+          "description": "Status of the discussed/first claim: submitted, processing, paid, or denied"
         },
         {
-          "label": "claim_diagnosis_code",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.diagnosis",
-          "description": "Diagnosis code for the discussed claim"
+          "label": "claim_1_cpt_code",
+          "json_path": "$.data.claims[0].codes.cpt",
+          "description": "CPT procedure code for the discussed/first claim"
         },
         {
-          "label": "claim_billed_amount",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].billedAmount",
-          "description": "Billed amount for the discussed claim"
+          "label": "claim_1_diagnosis_code",
+          "json_path": "$.data.claims[0].codes.diagnosis",
+          "description": "Diagnosis code for the discussed/first claim"
         },
         {
-          "label": "claim_allowed_amount",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].allowedAmount",
-          "description": "Allowed amount for the discussed claim"
+          "label": "claim_1_billed_amount",
+          "json_path": "$.data.claims[0].billedAmount",
+          "description": "Billed amount for the discussed/first claim"
         },
         {
-          "label": "claim_plan_paid_amount",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].planPaidAmount",
-          "description": "Plan-paid amount for the discussed claim"
+          "label": "claim_1_allowed_amount",
+          "json_path": "$.data.claims[0].allowedAmount",
+          "description": "Allowed amount for the discussed/first claim"
         },
         {
-          "label": "claim_member_responsibility",
-          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].memberResponsibility",
-          "description": "Member responsibility amount for the discussed claim"
+          "label": "claim_1_plan_paid_amount",
+          "json_path": "$.data.claims[0].planPaidAmount",
+          "description": "Plan-paid amount for the discussed/first claim"
+        },
+        {
+          "label": "claim_1_member_responsibility",
+          "json_path": "$.data.claims[0].memberResponsibility",
+          "description": "Member responsibility amount for the discussed/first claim"
+        },
+        {
+          "label": "claim_2_id",
+          "json_path": "$.data.claims[1].claimId",
+          "description": "Second claim's claimId — only present when claim_id is unset and the member has 2+ claims"
+        },
+        {
+          "label": "claim_2_service_date",
+          "json_path": "$.data.claims[1].serviceDate",
+          "description": "Second claim's service date"
+        },
+        {
+          "label": "claim_2_provider_name",
+          "json_path": "$.data.claims[1].providerName",
+          "description": "Second claim's provider name"
+        },
+        {
+          "label": "claim_2_status",
+          "json_path": "$.data.claims[1].status",
+          "description": "Second claim's status: submitted, processing, paid, or denied"
+        },
+        {
+          "label": "claim_2_cpt_code",
+          "json_path": "$.data.claims[1].codes.cpt",
+          "description": "Second claim's CPT procedure code"
+        },
+        {
+          "label": "claim_2_diagnosis_code",
+          "json_path": "$.data.claims[1].codes.diagnosis",
+          "description": "Second claim's diagnosis code"
+        },
+        {
+          "label": "claim_2_billed_amount",
+          "json_path": "$.data.claims[1].billedAmount",
+          "description": "Second claim's billed amount"
+        },
+        {
+          "label": "claim_2_allowed_amount",
+          "json_path": "$.data.claims[1].allowedAmount",
+          "description": "Second claim's allowed amount"
+        },
+        {
+          "label": "claim_2_plan_paid_amount",
+          "json_path": "$.data.claims[1].planPaidAmount",
+          "description": "Second claim's plan-paid amount"
+        },
+        {
+          "label": "claim_2_member_responsibility",
+          "json_path": "$.data.claims[1].memberResponsibility",
+          "description": "Second claim's member responsibility amount"
+        },
+        {
+          "label": "claim_3_id",
+          "json_path": "$.data.claims[2].claimId",
+          "description": "Third claim's claimId — only present when claim_id is unset and the member has 3 claims"
+        },
+        {
+          "label": "claim_3_service_date",
+          "json_path": "$.data.claims[2].serviceDate",
+          "description": "Third claim's service date"
+        },
+        {
+          "label": "claim_3_provider_name",
+          "json_path": "$.data.claims[2].providerName",
+          "description": "Third claim's provider name"
+        },
+        {
+          "label": "claim_3_status",
+          "json_path": "$.data.claims[2].status",
+          "description": "Third claim's status: submitted, processing, paid, or denied"
+        },
+        {
+          "label": "claim_3_cpt_code",
+          "json_path": "$.data.claims[2].codes.cpt",
+          "description": "Third claim's CPT procedure code"
+        },
+        {
+          "label": "claim_3_diagnosis_code",
+          "json_path": "$.data.claims[2].codes.diagnosis",
+          "description": "Third claim's diagnosis code"
+        },
+        {
+          "label": "claim_3_billed_amount",
+          "json_path": "$.data.claims[2].billedAmount",
+          "description": "Third claim's billed amount"
+        },
+        {
+          "label": "claim_3_allowed_amount",
+          "json_path": "$.data.claims[2].allowedAmount",
+          "description": "Third claim's allowed amount"
+        },
+        {
+          "label": "claim_3_plan_paid_amount",
+          "json_path": "$.data.claims[2].planPaidAmount",
+          "description": "Third claim's plan-paid amount"
+        },
+        {
+          "label": "claim_3_member_responsibility",
+          "json_path": "$.data.claims[2].memberResponsibility",
+          "description": "Third claim's member responsibility amount"
         },
         {
           "label": "benefit_copay",
-          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].copay",
-          "description": "Copay for the discussed service type/network level (requires service_type, network_level)"
+          "json_path": "$.data.benefitsCatalog[0].copay",
+          "description": "Copay for the discussed service_type/network_level (defaults to primary_care_visit/in_network if unset)"
         },
         {
           "label": "benefit_coinsurance",
-          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].coinsurance",
-          "description": "Coinsurance percentage"
+          "json_path": "$.data.benefitsCatalog[0].coinsurance",
+          "description": "Coinsurance for the discussed service_type/network_level"
         },
         {
           "label": "benefit_deductible_applies",
-          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].deductibleApplies",
-          "description": "Whether the deductible applies to this service"
+          "json_path": "$.data.benefitsCatalog[0].deductibleApplies",
+          "description": "Whether the deductible applies to the discussed service_type/network_level"
         },
         {
           "label": "benefit_limits",
-          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].limits",
-          "description": "Visit/quantity limits, or null"
+          "json_path": "$.data.benefitsCatalog[0].limits",
+          "description": "Visit/quantity limits for the discussed service_type/network_level, or null"
         },
         {
           "label": "benefit_prior_authorization_required",
-          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].priorAuthorizationRequired",
-          "description": "Whether prior authorization is required"
+          "json_path": "$.data.benefitsCatalog[0].priorAuthorizationRequired",
+          "description": "Whether prior authorization is required for the discussed service_type/network_level"
         }
       ]
     },
     {
       "name": "pharmacy_lookup",
-      "url": "https://healthcare-mock-mcp.vercel.app/api/pharmacy/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/pharmacy/{{member_id}}?drugName={{drug_name}}&pharmacyId={{pharmacy_id}}&prescriptionReference={{prescription_reference}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -381,99 +522,104 @@
         },
         {
           "label": "formulary_tier",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].tier",
-          "description": "Formulary tier 1-4 for the discussed drug (requires drug_name)"
+          "json_path": "$.data.formulary[0].tier",
+          "description": "Formulary tier 1-4 for the discussed drug_name (defaults to metformin if unset); 404 drug_not_found if it doesn't exist"
         },
         {
           "label": "formulary_strength",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].strength",
-          "description": "Drug strength"
+          "json_path": "$.data.formulary[0].strength",
+          "description": "Drug strength for the discussed/default drug"
         },
         {
           "label": "formulary_form",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].form",
-          "description": "Drug form (tablet, injection, inhaler, capsule)"
+          "json_path": "$.data.formulary[0].form",
+          "description": "Drug form (tablet, injection, inhaler, capsule) for the discussed/default drug"
         },
         {
           "label": "formulary_prior_auth_required",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].priorAuthorizationRequired",
-          "description": "Whether prior authorization is required"
+          "json_path": "$.data.formulary[0].priorAuthorizationRequired",
+          "description": "Whether prior authorization is required for the discussed/default drug"
         },
         {
           "label": "formulary_step_therapy_required",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].stepTherapyRequired",
-          "description": "Whether step therapy is required"
+          "json_path": "$.data.formulary[0].stepTherapyRequired",
+          "description": "Whether step therapy is required for the discussed/default drug"
         },
         {
           "label": "formulary_quantity_limit",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].quantityLimit",
-          "description": "Quantity limit, or null"
+          "json_path": "$.data.formulary[0].quantityLimit",
+          "description": "Quantity limit for the discussed/default drug, or null"
         },
         {
           "label": "formulary_specialty_required",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].specialtyRequired",
-          "description": "Whether specialty pharmacy is required"
+          "json_path": "$.data.formulary[0].specialtyRequired",
+          "description": "Whether specialty pharmacy is required for the discussed/default drug"
         },
         {
           "label": "formulary_covered",
-          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].covered",
-          "description": "Whether the drug is covered at all"
+          "json_path": "$.data.formulary[0].covered",
+          "description": "Whether the discussed/default drug is covered at all"
         },
         {
           "label": "pharmacy_name",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].name",
-          "description": "Pharmacy name (requires pharmacy_id)"
+          "json_path": "$.data.pharmacies[0].name",
+          "description": "Pharmacy name for the discussed pharmacy_id (defaults to PHM01 if unset); empty result (no error) if pharmacy_id doesn't exist"
         },
         {
           "label": "pharmacy_type",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].type",
-          "description": "Pharmacy type: retail, mail_order, or specialty"
+          "json_path": "$.data.pharmacies[0].type",
+          "description": "Pharmacy type for the discussed/default pharmacy: retail, mail_order, or specialty"
         },
         {
           "label": "pharmacy_network_category",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].networkCategory",
-          "description": "Network category: preferred, standard, or out_of_network"
+          "json_path": "$.data.pharmacies[0].networkCategory",
+          "description": "Network category for the discussed/default pharmacy: preferred, standard, or out_of_network"
         },
         {
           "label": "pharmacy_mail_order_available",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].mailOrderAvailable",
-          "description": "Whether mail order is available"
+          "json_path": "$.data.pharmacies[0].mailOrderAvailable",
+          "description": "Whether mail order is available at the discussed/default pharmacy"
         },
         {
           "label": "pharmacy_city",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.city",
-          "description": "Pharmacy city"
+          "json_path": "$.data.pharmacies[0].location.city",
+          "description": "City for the discussed/default pharmacy"
         },
         {
           "label": "pharmacy_state",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.state",
-          "description": "Pharmacy state"
+          "json_path": "$.data.pharmacies[0].location.state",
+          "description": "State for the discussed/default pharmacy"
         },
         {
           "label": "pharmacy_zip",
-          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.zip",
-          "description": "Pharmacy ZIP code"
+          "json_path": "$.data.pharmacies[0].location.zip",
+          "description": "ZIP code for the discussed/default pharmacy"
+        },
+        {
+          "label": "prescription_rejection_reference",
+          "json_path": "$.data.prescriptionRejections[0].reference",
+          "description": "Reference of the discussed prescription_reference (defaults to RX-DEMO-0001 if unset); 404 prescription_not_found if it isn't one of the canned references"
         },
         {
           "label": "prescription_rejection_code",
-          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.code",
-          "description": "Rejection code (requires prescription_reference, e.g. RX-DEMO-0001)"
+          "json_path": "$.data.prescriptionRejections[0].code",
+          "description": "Rejection code for the discussed/default reference"
         },
         {
           "label": "prescription_rejection_explanation",
-          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.explanation",
-          "description": "Plain-language rejection explanation"
+          "json_path": "$.data.prescriptionRejections[0].explanation",
+          "description": "Plain-language rejection explanation for the discussed/default reference"
         },
         {
           "label": "prescription_rejection_next_action",
-          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.nextAction",
-          "description": "Recommended next action"
+          "json_path": "$.data.prescriptionRejections[0].nextAction",
+          "description": "Recommended next action for the discussed/default reference"
         }
       ]
     },
     {
       "name": "provider_lookup",
-      "url": "https://healthcare-mock-mcp.vercel.app/api/providers/{{member_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/providers/{{member_id}}?providerId={{provider_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -530,6 +676,46 @@
           "label": "pcp_zip",
           "json_path": "$.data.pcp.location.zip",
           "description": "Assigned PCP's ZIP code"
+        },
+        {
+          "label": "provider_directory_id",
+          "json_path": "$.data.providerDirectory[0].providerId",
+          "description": "providerId of the discussed provider_id (defaults to PRV2000 if unset); 404 provider_not_found if it doesn't exist"
+        },
+        {
+          "label": "provider_directory_name",
+          "json_path": "$.data.providerDirectory[0].name",
+          "description": "Name of the discussed/default provider (independent of the member's own assigned PCP)"
+        },
+        {
+          "label": "provider_directory_specialty",
+          "json_path": "$.data.providerDirectory[0].specialty",
+          "description": "Specialty of the discussed/default provider"
+        },
+        {
+          "label": "provider_directory_network_status",
+          "json_path": "$.data.providerDirectory[0].networkStatus",
+          "description": "Network status of the discussed/default provider: in_network or out_of_network"
+        },
+        {
+          "label": "provider_directory_accepting_new_patients",
+          "json_path": "$.data.providerDirectory[0].acceptingNewPatients",
+          "description": "Whether the discussed/default provider is accepting new patients"
+        },
+        {
+          "label": "provider_directory_city",
+          "json_path": "$.data.providerDirectory[0].location.city",
+          "description": "City for the discussed/default provider"
+        },
+        {
+          "label": "provider_directory_state",
+          "json_path": "$.data.providerDirectory[0].location.state",
+          "description": "State for the discussed/default provider"
+        },
+        {
+          "label": "provider_directory_zip",
+          "json_path": "$.data.providerDirectory[0].location.zip",
+          "description": "ZIP code for the discussed/default provider"
         }
       ]
     }

@@ -2,14 +2,13 @@
 // app/api/members/[memberId]/route.ts for the pattern this follows.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getDemoEligibility } from "@/lib/healthcare-tools";
+import { getDemoEligibility, restErrorStatus } from "@/lib/healthcare-tools";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const { memberId } = await params;
   const result = getDemoEligibility({ memberId });
   if (!result.success) {
-    const status = result.error.code === "member_not_found" ? 404 : 400;
-    return NextResponse.json(result, { status });
+    return NextResponse.json(result, { status: restErrorStatus(result.error.code) });
   }
   return NextResponse.json(result, { status: 200 });
 }
