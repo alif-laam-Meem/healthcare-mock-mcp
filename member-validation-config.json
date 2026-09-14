@@ -1,5 +1,5 @@
 {
-  "description": "Validate agent-stated synthetic member/eligibility/claims/benefits/pharmacy/provider details against the healthcare-mock-mcp system of record",
+  "description": "Validate agent-stated synthetic member/eligibility/dependents/claims/benefits/pharmacy/provider details against the healthcare-mock-mcp system of record",
   "variables": [
     {
       "name": "member_id",
@@ -44,10 +44,10 @@
       "description": "Canned prescription rejection reference (RX-DEMO-0001..0004), if discussed"
     },
     {
-      "name": "provider_id",
+      "name": "dependent_id",
       "source": "test_profile",
-      "profile_field": "provider_id",
-      "description": "Synthetic providerId discussed (e.g. PRV2000), if not the member's assigned PCP"
+      "profile_field": "dependent_id",
+      "description": "Synthetic dependentId discussed (e.g. M1000-D1), if any"
     }
   ],
   "endpoints": [
@@ -61,20 +61,76 @@
         200
       ],
       "validation_mappings": [
-        { "label": "member_id", "json_path": "$.data.memberId", "description": "Member ID" },
-        { "label": "member_first_name", "json_path": "$.data.firstName", "description": "First name" },
-        { "label": "member_last_name", "json_path": "$.data.lastName", "description": "Last name" },
-        { "label": "member_dob", "json_path": "$.data.dob", "description": "Date of birth (YYYY-MM-DD)" },
-        { "label": "member_gender", "json_path": "$.data.gender", "description": "Gender: F, M, or X" },
-        { "label": "member_coverage_status", "json_path": "$.data.coverageStatus", "description": "Coverage status: active or inactive" },
-        { "label": "member_pcp_provider_id", "json_path": "$.data.pcpProviderId", "description": "Assigned PCP providerId, or null if none assigned" },
-        { "label": "member_plan_name", "json_path": "$.data.plan.name", "description": "Plan name (e.g. Synthetic PPO Gold)" },
-        { "label": "member_plan_type", "json_path": "$.data.plan.type", "description": "Plan type: PPO, HMO, or EPO" },
-        { "label": "member_plan_effective_date", "json_path": "$.data.plan.effectiveDate", "description": "Plan effective date" },
-        { "label": "member_plan_termination_date", "json_path": "$.data.plan.terminationDate", "description": "Plan termination date, or null if active" },
-        { "label": "member_city", "json_path": "$.data.location.city", "description": "Member's city" },
-        { "label": "member_state", "json_path": "$.data.location.state", "description": "Member's state" },
-        { "label": "member_zip", "json_path": "$.data.location.zip", "description": "Member's ZIP code" }
+        {
+          "label": "member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "member_first_name",
+          "json_path": "$.data.firstName",
+          "description": "First name"
+        },
+        {
+          "label": "member_last_name",
+          "json_path": "$.data.lastName",
+          "description": "Last name"
+        },
+        {
+          "label": "member_dob",
+          "json_path": "$.data.dob",
+          "description": "Date of birth (YYYY-MM-DD)"
+        },
+        {
+          "label": "member_gender",
+          "json_path": "$.data.gender",
+          "description": "Gender: F, M, or X"
+        },
+        {
+          "label": "member_coverage_status",
+          "json_path": "$.data.coverageStatus",
+          "description": "Coverage status: active or inactive"
+        },
+        {
+          "label": "member_pcp_provider_id",
+          "json_path": "$.data.pcpProviderId",
+          "description": "Assigned PCP providerId, or null if none assigned"
+        },
+        {
+          "label": "member_plan_name",
+          "json_path": "$.data.plan.name",
+          "description": "Plan name (e.g. Synthetic PPO Gold)"
+        },
+        {
+          "label": "member_plan_type",
+          "json_path": "$.data.plan.type",
+          "description": "Plan type: PPO, HMO, or EPO"
+        },
+        {
+          "label": "member_plan_effective_date",
+          "json_path": "$.data.plan.effectiveDate",
+          "description": "Plan effective date"
+        },
+        {
+          "label": "member_plan_termination_date",
+          "json_path": "$.data.plan.terminationDate",
+          "description": "Plan termination date, or null if active"
+        },
+        {
+          "label": "member_city",
+          "json_path": "$.data.location.city",
+          "description": "Member's city"
+        },
+        {
+          "label": "member_state",
+          "json_path": "$.data.location.state",
+          "description": "Member's state"
+        },
+        {
+          "label": "member_zip",
+          "json_path": "$.data.location.zip",
+          "description": "Member's ZIP code"
+        }
       ]
     },
     {
@@ -87,13 +143,78 @@
         200
       ],
       "validation_mappings": [
-        { "label": "eligibility_member_id", "json_path": "$.data.memberId", "description": "Member ID" },
-        { "label": "eligibility_coverage_status", "json_path": "$.data.coverageStatus", "description": "Coverage status: active or inactive" },
-        { "label": "eligibility_plan_name", "json_path": "$.data.plan.name", "description": "Plan name" },
-        { "label": "eligibility_plan_type", "json_path": "$.data.plan.type", "description": "Plan type: PPO, HMO, or EPO" },
-        { "label": "eligibility_effective_date", "json_path": "$.data.effectiveDate", "description": "Coverage effective date" },
-        { "label": "eligibility_termination_date", "json_path": "$.data.terminationDate", "description": "Coverage termination date, or null if active" },
-        { "label": "eligibility_data_timestamp", "json_path": "$.data.dataTimestamp", "description": "Timestamp the synthetic dataset was generated as-of" }
+        {
+          "label": "eligibility_member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "eligibility_coverage_status",
+          "json_path": "$.data.coverageStatus",
+          "description": "Coverage status: active or inactive"
+        },
+        {
+          "label": "eligibility_plan_name",
+          "json_path": "$.data.plan.name",
+          "description": "Plan name"
+        },
+        {
+          "label": "eligibility_plan_type",
+          "json_path": "$.data.plan.type",
+          "description": "Plan type: PPO, HMO, or EPO"
+        },
+        {
+          "label": "eligibility_effective_date",
+          "json_path": "$.data.effectiveDate",
+          "description": "Coverage effective date"
+        },
+        {
+          "label": "eligibility_termination_date",
+          "json_path": "$.data.terminationDate",
+          "description": "Coverage termination date, or null if active"
+        },
+        {
+          "label": "eligibility_data_timestamp",
+          "json_path": "$.data.dataTimestamp",
+          "description": "Timestamp the synthetic dataset was generated as-of"
+        }
+      ]
+    },
+    {
+      "name": "dependents_lookup",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/dependents/{{member_id}}",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10,
+      "expected_status": [
+        200
+      ],
+      "validation_mappings": [
+        {
+          "label": "dependents_member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "dependent_name",
+          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].name",
+          "description": "Dependent's name for the discussed dependentId (requires dependent_id, e.g. M1000-D1)"
+        },
+        {
+          "label": "dependent_relationship",
+          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].relationship",
+          "description": "Relationship to the member: spouse or child"
+        },
+        {
+          "label": "dependent_dob",
+          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].dob",
+          "description": "Dependent's date of birth (YYYY-MM-DD)"
+        },
+        {
+          "label": "dependent_coverage_status",
+          "json_path": "$.data.dependents[?(@.dependentId=='{{dependent_id}}')].coverageStatus",
+          "description": "Dependent's coverage status: active or inactive"
+        }
       ]
     },
     {
@@ -106,33 +227,141 @@
         200
       ],
       "validation_mappings": [
-        { "label": "claims_member_id", "json_path": "$.data.memberId", "description": "Member ID" },
-        { "label": "individual_deductible_limit", "json_path": "$.data.accumulators.individual.deductible.limit", "description": "Individual deductible limit" },
-        { "label": "individual_deductible_met", "json_path": "$.data.accumulators.individual.deductible.met", "description": "Individual deductible amount met" },
-        { "label": "individual_deductible_remaining", "json_path": "$.data.accumulators.individual.deductible.remaining", "description": "Individual deductible amount remaining" },
-        { "label": "individual_oop_limit", "json_path": "$.data.accumulators.individual.outOfPocket.limit", "description": "Individual out-of-pocket limit" },
-        { "label": "individual_oop_met", "json_path": "$.data.accumulators.individual.outOfPocket.met", "description": "Individual out-of-pocket amount met" },
-        { "label": "individual_oop_remaining", "json_path": "$.data.accumulators.individual.outOfPocket.remaining", "description": "Individual out-of-pocket amount remaining" },
-        { "label": "family_deductible_limit", "json_path": "$.data.accumulators.family.deductible.limit", "description": "Family deductible limit, or null if member has no dependents" },
-        { "label": "family_deductible_met", "json_path": "$.data.accumulators.family.deductible.met", "description": "Family deductible amount met" },
-        { "label": "family_deductible_remaining", "json_path": "$.data.accumulators.family.deductible.remaining", "description": "Family deductible amount remaining" },
-        { "label": "family_oop_limit", "json_path": "$.data.accumulators.family.outOfPocket.limit", "description": "Family out-of-pocket limit, or null if member has no dependents" },
-        { "label": "family_oop_met", "json_path": "$.data.accumulators.family.outOfPocket.met", "description": "Family out-of-pocket amount met" },
-        { "label": "family_oop_remaining", "json_path": "$.data.accumulators.family.outOfPocket.remaining", "description": "Family out-of-pocket amount remaining" },
-        { "label": "claim_service_date", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].serviceDate", "description": "Service date for the discussed claim (requires claim_id)" },
-        { "label": "claim_provider_name", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].providerName", "description": "Provider name for the discussed claim" },
-        { "label": "claim_status", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].status", "description": "Status: submitted, processing, paid, or denied" },
-        { "label": "claim_cpt_code", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.cpt", "description": "CPT procedure code for the discussed claim" },
-        { "label": "claim_diagnosis_code", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.diagnosis", "description": "Diagnosis code for the discussed claim" },
-        { "label": "claim_billed_amount", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].billedAmount", "description": "Billed amount for the discussed claim" },
-        { "label": "claim_allowed_amount", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].allowedAmount", "description": "Allowed amount for the discussed claim" },
-        { "label": "claim_plan_paid_amount", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].planPaidAmount", "description": "Plan-paid amount for the discussed claim" },
-        { "label": "claim_member_responsibility", "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].memberResponsibility", "description": "Member responsibility amount for the discussed claim" },
-        { "label": "benefit_copay", "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].copay", "description": "Copay for the discussed service type/network level (requires service_type, network_level)" },
-        { "label": "benefit_coinsurance", "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].coinsurance", "description": "Coinsurance percentage" },
-        { "label": "benefit_deductible_applies", "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].deductibleApplies", "description": "Whether the deductible applies to this service" },
-        { "label": "benefit_limits", "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].limits", "description": "Visit/quantity limits, or null" },
-        { "label": "benefit_prior_authorization_required", "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].priorAuthorizationRequired", "description": "Whether prior authorization is required" }
+        {
+          "label": "claims_member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "individual_deductible_limit",
+          "json_path": "$.data.accumulators.individual.deductible.limit",
+          "description": "Individual deductible limit"
+        },
+        {
+          "label": "individual_deductible_met",
+          "json_path": "$.data.accumulators.individual.deductible.met",
+          "description": "Individual deductible amount met"
+        },
+        {
+          "label": "individual_deductible_remaining",
+          "json_path": "$.data.accumulators.individual.deductible.remaining",
+          "description": "Individual deductible amount remaining"
+        },
+        {
+          "label": "individual_oop_limit",
+          "json_path": "$.data.accumulators.individual.outOfPocket.limit",
+          "description": "Individual out-of-pocket limit"
+        },
+        {
+          "label": "individual_oop_met",
+          "json_path": "$.data.accumulators.individual.outOfPocket.met",
+          "description": "Individual out-of-pocket amount met"
+        },
+        {
+          "label": "individual_oop_remaining",
+          "json_path": "$.data.accumulators.individual.outOfPocket.remaining",
+          "description": "Individual out-of-pocket amount remaining"
+        },
+        {
+          "label": "family_deductible_limit",
+          "json_path": "$.data.accumulators.family.deductible.limit",
+          "description": "Family deductible limit, or null if member has no dependents"
+        },
+        {
+          "label": "family_deductible_met",
+          "json_path": "$.data.accumulators.family.deductible.met",
+          "description": "Family deductible amount met"
+        },
+        {
+          "label": "family_deductible_remaining",
+          "json_path": "$.data.accumulators.family.deductible.remaining",
+          "description": "Family deductible amount remaining"
+        },
+        {
+          "label": "family_oop_limit",
+          "json_path": "$.data.accumulators.family.outOfPocket.limit",
+          "description": "Family out-of-pocket limit, or null if member has no dependents"
+        },
+        {
+          "label": "family_oop_met",
+          "json_path": "$.data.accumulators.family.outOfPocket.met",
+          "description": "Family out-of-pocket amount met"
+        },
+        {
+          "label": "family_oop_remaining",
+          "json_path": "$.data.accumulators.family.outOfPocket.remaining",
+          "description": "Family out-of-pocket amount remaining"
+        },
+        {
+          "label": "claim_service_date",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].serviceDate",
+          "description": "Service date for the discussed claim (requires claim_id)"
+        },
+        {
+          "label": "claim_provider_name",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].providerName",
+          "description": "Provider name for the discussed claim"
+        },
+        {
+          "label": "claim_status",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].status",
+          "description": "Status: submitted, processing, paid, or denied"
+        },
+        {
+          "label": "claim_cpt_code",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.cpt",
+          "description": "CPT procedure code for the discussed claim"
+        },
+        {
+          "label": "claim_diagnosis_code",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].codes.diagnosis",
+          "description": "Diagnosis code for the discussed claim"
+        },
+        {
+          "label": "claim_billed_amount",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].billedAmount",
+          "description": "Billed amount for the discussed claim"
+        },
+        {
+          "label": "claim_allowed_amount",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].allowedAmount",
+          "description": "Allowed amount for the discussed claim"
+        },
+        {
+          "label": "claim_plan_paid_amount",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].planPaidAmount",
+          "description": "Plan-paid amount for the discussed claim"
+        },
+        {
+          "label": "claim_member_responsibility",
+          "json_path": "$.data.claims[?(@.claimId=='{{claim_id}}')].memberResponsibility",
+          "description": "Member responsibility amount for the discussed claim"
+        },
+        {
+          "label": "benefit_copay",
+          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].copay",
+          "description": "Copay for the discussed service type/network level (requires service_type, network_level)"
+        },
+        {
+          "label": "benefit_coinsurance",
+          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].coinsurance",
+          "description": "Coinsurance percentage"
+        },
+        {
+          "label": "benefit_deductible_applies",
+          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].deductibleApplies",
+          "description": "Whether the deductible applies to this service"
+        },
+        {
+          "label": "benefit_limits",
+          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].limits",
+          "description": "Visit/quantity limits, or null"
+        },
+        {
+          "label": "benefit_prior_authorization_required",
+          "json_path": "$.data.benefitsCatalog[?(@.serviceType=='{{service_type}}' && @.networkLevel=='{{network_level}}')].priorAuthorizationRequired",
+          "description": "Whether prior authorization is required"
+        }
       ]
     },
     {
@@ -145,25 +374,101 @@
         200
       ],
       "validation_mappings": [
-        { "label": "pharmacy_member_id", "json_path": "$.data.memberId", "description": "Member ID" },
-        { "label": "formulary_tier", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].tier", "description": "Formulary tier 1-4 for the discussed drug (requires drug_name)" },
-        { "label": "formulary_strength", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].strength", "description": "Drug strength" },
-        { "label": "formulary_form", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].form", "description": "Drug form (tablet, injection, inhaler, capsule)" },
-        { "label": "formulary_prior_auth_required", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].priorAuthorizationRequired", "description": "Whether prior authorization is required" },
-        { "label": "formulary_step_therapy_required", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].stepTherapyRequired", "description": "Whether step therapy is required" },
-        { "label": "formulary_quantity_limit", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].quantityLimit", "description": "Quantity limit, or null" },
-        { "label": "formulary_specialty_required", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].specialtyRequired", "description": "Whether specialty pharmacy is required" },
-        { "label": "formulary_covered", "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].covered", "description": "Whether the drug is covered at all" },
-        { "label": "pharmacy_name", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].name", "description": "Pharmacy name (requires pharmacy_id)" },
-        { "label": "pharmacy_type", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].type", "description": "Pharmacy type: retail, mail_order, or specialty" },
-        { "label": "pharmacy_network_category", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].networkCategory", "description": "Network category: preferred, standard, or out_of_network" },
-        { "label": "pharmacy_mail_order_available", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].mailOrderAvailable", "description": "Whether mail order is available" },
-        { "label": "pharmacy_city", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.city", "description": "Pharmacy city" },
-        { "label": "pharmacy_state", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.state", "description": "Pharmacy state" },
-        { "label": "pharmacy_zip", "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.zip", "description": "Pharmacy ZIP code" },
-        { "label": "prescription_rejection_code", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.code", "description": "Rejection code (requires prescription_reference, e.g. RX-DEMO-0001)" },
-        { "label": "prescription_rejection_explanation", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.explanation", "description": "Plain-language rejection explanation" },
-        { "label": "prescription_rejection_next_action", "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.nextAction", "description": "Recommended next action" }
+        {
+          "label": "pharmacy_member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "formulary_tier",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].tier",
+          "description": "Formulary tier 1-4 for the discussed drug (requires drug_name)"
+        },
+        {
+          "label": "formulary_strength",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].strength",
+          "description": "Drug strength"
+        },
+        {
+          "label": "formulary_form",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].form",
+          "description": "Drug form (tablet, injection, inhaler, capsule)"
+        },
+        {
+          "label": "formulary_prior_auth_required",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].priorAuthorizationRequired",
+          "description": "Whether prior authorization is required"
+        },
+        {
+          "label": "formulary_step_therapy_required",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].stepTherapyRequired",
+          "description": "Whether step therapy is required"
+        },
+        {
+          "label": "formulary_quantity_limit",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].quantityLimit",
+          "description": "Quantity limit, or null"
+        },
+        {
+          "label": "formulary_specialty_required",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].specialtyRequired",
+          "description": "Whether specialty pharmacy is required"
+        },
+        {
+          "label": "formulary_covered",
+          "json_path": "$.data.formulary[?(@.drugName=='{{drug_name}}')].covered",
+          "description": "Whether the drug is covered at all"
+        },
+        {
+          "label": "pharmacy_name",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].name",
+          "description": "Pharmacy name (requires pharmacy_id)"
+        },
+        {
+          "label": "pharmacy_type",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].type",
+          "description": "Pharmacy type: retail, mail_order, or specialty"
+        },
+        {
+          "label": "pharmacy_network_category",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].networkCategory",
+          "description": "Network category: preferred, standard, or out_of_network"
+        },
+        {
+          "label": "pharmacy_mail_order_available",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].mailOrderAvailable",
+          "description": "Whether mail order is available"
+        },
+        {
+          "label": "pharmacy_city",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.city",
+          "description": "Pharmacy city"
+        },
+        {
+          "label": "pharmacy_state",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.state",
+          "description": "Pharmacy state"
+        },
+        {
+          "label": "pharmacy_zip",
+          "json_path": "$.data.pharmacies[?(@.pharmacyId=='{{pharmacy_id}}')].location.zip",
+          "description": "Pharmacy ZIP code"
+        },
+        {
+          "label": "prescription_rejection_code",
+          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.code",
+          "description": "Rejection code (requires prescription_reference, e.g. RX-DEMO-0001)"
+        },
+        {
+          "label": "prescription_rejection_explanation",
+          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.explanation",
+          "description": "Plain-language rejection explanation"
+        },
+        {
+          "label": "prescription_rejection_next_action",
+          "json_path": "$.data.prescriptionRejections.{{prescription_reference}}.nextAction",
+          "description": "Recommended next action"
+        }
       ]
     },
     {
@@ -176,23 +481,56 @@
         200
       ],
       "validation_mappings": [
-        { "label": "provider_member_id", "json_path": "$.data.memberId", "description": "Member ID" },
-        { "label": "pcp_assigned", "json_path": "$.data.pcpAssigned", "description": "Whether the member has a PCP assigned" },
-        { "label": "pcp_provider_id", "json_path": "$.data.pcp.providerId", "description": "Assigned PCP's providerId, or null if pcpAssigned is false" },
-        { "label": "pcp_name", "json_path": "$.data.pcp.name", "description": "Assigned PCP's name" },
-        { "label": "pcp_specialty", "json_path": "$.data.pcp.specialty", "description": "Assigned PCP's specialty" },
-        { "label": "pcp_network_status", "json_path": "$.data.pcp.networkStatus", "description": "Assigned PCP's network status: in_network or out_of_network" },
-        { "label": "pcp_accepting_new_patients", "json_path": "$.data.pcp.acceptingNewPatients", "description": "Whether the assigned PCP is accepting new patients" },
-        { "label": "pcp_city", "json_path": "$.data.pcp.location.city", "description": "Assigned PCP's city" },
-        { "label": "pcp_state", "json_path": "$.data.pcp.location.state", "description": "Assigned PCP's state" },
-        { "label": "pcp_zip", "json_path": "$.data.pcp.location.zip", "description": "Assigned PCP's ZIP code" },
-        { "label": "provider_name", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].name", "description": "Provider name for any discussed providerId (requires provider_id, e.g. PRV2000)" },
-        { "label": "provider_specialty", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].specialty", "description": "Specialty for the discussed provider" },
-        { "label": "provider_network_status", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].networkStatus", "description": "Network status: in_network or out_of_network" },
-        { "label": "provider_accepting_new_patients", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].acceptingNewPatients", "description": "Whether the discussed provider is accepting new patients" },
-        { "label": "provider_city", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.city", "description": "City for the discussed provider" },
-        { "label": "provider_state", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.state", "description": "State for the discussed provider" },
-        { "label": "provider_zip", "json_path": "$.data.providerDirectory[?(@.providerId=='{{provider_id}}')].location.zip", "description": "ZIP code for the discussed provider" }
+        {
+          "label": "provider_member_id",
+          "json_path": "$.data.memberId",
+          "description": "Member ID"
+        },
+        {
+          "label": "pcp_assigned",
+          "json_path": "$.data.pcpAssigned",
+          "description": "Whether the member has a PCP assigned"
+        },
+        {
+          "label": "pcp_provider_id",
+          "json_path": "$.data.pcp.providerId",
+          "description": "Assigned PCP's providerId, or null if pcpAssigned is false"
+        },
+        {
+          "label": "pcp_name",
+          "json_path": "$.data.pcp.name",
+          "description": "Assigned PCP's name"
+        },
+        {
+          "label": "pcp_specialty",
+          "json_path": "$.data.pcp.specialty",
+          "description": "Assigned PCP's specialty"
+        },
+        {
+          "label": "pcp_network_status",
+          "json_path": "$.data.pcp.networkStatus",
+          "description": "Assigned PCP's network status: in_network or out_of_network"
+        },
+        {
+          "label": "pcp_accepting_new_patients",
+          "json_path": "$.data.pcp.acceptingNewPatients",
+          "description": "Whether the assigned PCP is accepting new patients"
+        },
+        {
+          "label": "pcp_city",
+          "json_path": "$.data.pcp.location.city",
+          "description": "Assigned PCP's city"
+        },
+        {
+          "label": "pcp_state",
+          "json_path": "$.data.pcp.location.state",
+          "description": "Assigned PCP's state"
+        },
+        {
+          "label": "pcp_zip",
+          "json_path": "$.data.pcp.location.zip",
+          "description": "Assigned PCP's ZIP code"
+        }
       ]
     }
   ],
