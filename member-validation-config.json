@@ -48,12 +48,6 @@
       "source": "test_profile",
       "profile_field": "prescription_reference",
       "description": "Canned prescription rejection reference (RX-DEMO-0001..0004) discussed. Leave unset to default to RX-DEMO-0001."
-    },
-    {
-      "name": "provider_id",
-      "source": "test_profile",
-      "profile_field": "provider_id",
-      "description": "Synthetic providerId discussed (e.g. PRV2005), if not the member's assigned PCP. Leave unset to default to PRV2000 (the first directory entry)."
     }
   ],
   "endpoints": [
@@ -619,7 +613,7 @@
     },
     {
       "name": "provider_lookup",
-      "url": "https://healthcare-mock-mcp.vercel.app/api/providers/{{member_id}}?providerId={{provider_id}}",
+      "url": "https://healthcare-mock-mcp.vercel.app/api/providers/{{member_id}}",
       "method": "GET",
       "headers": {},
       "timeout": 10,
@@ -676,46 +670,6 @@
           "label": "pcp_zip",
           "json_path": "$.data.pcp.location.zip",
           "description": "Assigned PCP's ZIP code"
-        },
-        {
-          "label": "provider_directory_id",
-          "json_path": "$.data.providerDirectory[0].providerId",
-          "description": "providerId of the discussed provider_id (defaults to PRV2000 if unset); 404 provider_not_found if it doesn't exist"
-        },
-        {
-          "label": "provider_directory_name",
-          "json_path": "$.data.providerDirectory[0].name",
-          "description": "Name of the discussed/default provider (independent of the member's own assigned PCP)"
-        },
-        {
-          "label": "provider_directory_specialty",
-          "json_path": "$.data.providerDirectory[0].specialty",
-          "description": "Specialty of the discussed/default provider"
-        },
-        {
-          "label": "provider_directory_network_status",
-          "json_path": "$.data.providerDirectory[0].networkStatus",
-          "description": "Network status of the discussed/default provider: in_network or out_of_network"
-        },
-        {
-          "label": "provider_directory_accepting_new_patients",
-          "json_path": "$.data.providerDirectory[0].acceptingNewPatients",
-          "description": "Whether the discussed/default provider is accepting new patients"
-        },
-        {
-          "label": "provider_directory_city",
-          "json_path": "$.data.providerDirectory[0].location.city",
-          "description": "City for the discussed/default provider"
-        },
-        {
-          "label": "provider_directory_state",
-          "json_path": "$.data.providerDirectory[0].location.state",
-          "description": "State for the discussed/default provider"
-        },
-        {
-          "label": "provider_directory_zip",
-          "json_path": "$.data.providerDirectory[0].location.zip",
-          "description": "ZIP code for the discussed/default provider"
         }
       ]
     }

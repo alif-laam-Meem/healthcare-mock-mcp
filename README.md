@@ -1005,9 +1005,9 @@ curl -s -w "\nHTTP %{http_code}\n" https://healthcare-mock-mcp.vercel.app/api/me
 repo root is a worked example. It declares all six endpoints above,
 sourcing `member_id` plus one optional lookup key per filterable field
 (`dependent_id`, `claim_id`, `service_type`/`network_level`, `drug_name`,
-`pharmacy_id`, `prescription_reference`, `provider_id`) from a test
-profile, and passes each of those straight through as a **query param** on
-the matching endpoint's `url` (e.g.
+`pharmacy_id`, `prescription_reference`) from a test profile, and passes
+each of those straight through as a **query param** on the matching
+endpoint's `url` (e.g.
 `.../api/claims/{{member_id}}?claimId={{claim_id}}&serviceType={{service_type}}&networkLevel={{network_level}}`).
 Every `json_path` then reads a fixed index (`[0]`, plus `[1]`/`[2]` for
 dependents/claims, since a member can have more than one) rather than a
