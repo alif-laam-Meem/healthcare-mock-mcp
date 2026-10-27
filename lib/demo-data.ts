@@ -325,7 +325,30 @@ export const PRESCRIPTION_REJECTIONS: Record<
 // ---------------------------------------------------------------------------
 // Lookup helpers
 // ---------------------------------------------------------------------------
-export const findMember = (memberId: string) => MEMBERS.find((m) => m.memberId === memberId);
+// Normalizes memberId before matching so voice-channel transcription quirks
+// (e.g. speech-to-text hearing "M1003" as "M 1003", or stray casing) still
+// resolve to the right account instead of a false member_not_found.
+export const normalizeMemberId = (memberId: string) => memberId.replace(/\s+/g, "").toUpperCase();
+
+export const findMember = (memberId: string) => {
+  const normalized = normalizeMemberId(memberId);
+  return MEMBERS.find((m) => m.memberId === normalized);
+};
+
+// Normalizes dob before matching, but only where the input is unambiguous:
+// the canonical "YYYY-MM-DD" (optionally with stray whitespace) or a
+// digit-only "YYYYMMDD" (year always comes first, so no MM/DD-vs-DD/MM
+// guessing). Anything else — slashes, spoken month names — is left as-is
+// and simply won't match, rather than risk matching the wrong member on a
+// misread date.
+export const normalizeDob = (dob: string): string => {
+  const trimmed = dob.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{8}$/.test(trimmed)) {
+    return `${trimmed.slice(0, 4)}-${trimmed.slice(4, 6)}-${trimmed.slice(6, 8)}`;
+  }
+  return trimmed;
+};
 
 export interface MemberIdentifiers {
   memberId?: string;
@@ -344,7 +367,7 @@ export const findMembersByIdentifiers = ({ memberId, firstName, lastName, dob }:
   return MEMBERS.filter((m) => {
     const matchesFirst = !firstName || m.firstName.toLowerCase() === firstName.toLowerCase();
     const matchesLast = !lastName || m.lastName.toLowerCase() === lastName.toLowerCase();
-    const matchesDob = !dob || m.dob === dob;
+    const matchesDob = !dob || m.dob === normalizeDob(dob);
     return matchesFirst && matchesLast && matchesDob;
   });
 };

@@ -20,6 +20,7 @@ import {
   findMember,
   findMembersByIdentifiers,
   findProvider,
+  normalizeMemberId,
   type Member,
   type Provider,
 } from "./demo-data";
@@ -301,7 +302,7 @@ export function getDemoClaimDetails(input: Record<string, unknown>) {
   if ("error" in claimId) return claimId.error;
   const claim = findClaim(claimId.value);
   if (!claim) return err(tool, "claim_not_found", `No synthetic claim matched claimId ${claimId.value}.`);
-  if (typeof input.memberId === "string" && input.memberId && input.memberId !== claim.memberId) {
+  if (typeof input.memberId === "string" && input.memberId && normalizeMemberId(input.memberId) !== claim.memberId) {
     return err(tool, "claim_member_mismatch", `Claim ${claimId.value} does not belong to memberId ${input.memberId}.`);
   }
   return ok(tool, claim);
@@ -541,17 +542,18 @@ export function getDemoClaimsBenefitsProfile(input: Record<string, unknown>): To
   benefitsCatalog: typeof BENEFITS;
 }> {
   const tool = "get_demo_claims_benefits_profile";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
+  const memberIdInput = requireString(tool, input, "memberId");
+  if ("error" in memberIdInput) return memberIdInput.error;
+  const member = requireMember(tool, memberIdInput.value);
   if ("error" in member) return member.error;
+  const memberId = member.member.memberId;
 
-  let claims = findClaimsByMember(memberId.value);
+  let claims = findClaimsByMember(memberId);
   const claimId = optionalTrimmed(input, "claimId");
   if (claimId) {
     claims = claims.filter((c) => c.claimId === claimId);
     if (claims.length === 0) {
-      return err(tool, "claim_not_found", `No claim ${claimId} found for memberId ${memberId.value}.`);
+      return err(tool, "claim_not_found", `No claim ${claimId} found for memberId ${memberId}.`);
     }
   }
 
@@ -566,9 +568,9 @@ export function getDemoClaimsBenefitsProfile(input: Record<string, unknown>): To
   }
 
   return ok(tool, {
-    memberId: memberId.value,
+    memberId,
     claims,
-    accumulators: findAccumulators(memberId.value) ?? null,
+    accumulators: findAccumulators(memberId) ?? null,
     benefitsCatalog,
   });
 }
@@ -580,10 +582,11 @@ export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResu
   prescriptionRejections: { reference: string; code: string; explanation: string; nextAction: string }[];
 }> {
   const tool = "get_demo_pharmacy_profile";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
+  const memberIdInput = requireString(tool, input, "memberId");
+  if ("error" in memberIdInput) return memberIdInput.error;
+  const member = requireMember(tool, memberIdInput.value);
   if ("error" in member) return member.error;
+  const memberId = member.member.memberId;
 
   let formulary = FORMULARY;
   const drugName = optionalTrimmed(input, "drugName");
@@ -622,7 +625,7 @@ export function getDemoPharmacyProfile(input: Record<string, unknown>): ToolResu
   }
 
   return ok(tool, {
-    memberId: memberId.value,
+    memberId,
     formulary,
     pharmacies,
     prescriptionRejections,
@@ -636,10 +639,11 @@ export function getDemoProviderProfile(input: Record<string, unknown>): ToolResu
   providerDirectory: typeof PROVIDERS;
 }> {
   const tool = "get_demo_provider_profile";
-  const memberId = requireString(tool, input, "memberId");
-  if ("error" in memberId) return memberId.error;
-  const member = requireMember(tool, memberId.value);
+  const memberIdInput = requireString(tool, input, "memberId");
+  if ("error" in memberIdInput) return memberIdInput.error;
+  const member = requireMember(tool, memberIdInput.value);
   if ("error" in member) return member.error;
+  const memberId = member.member.memberId;
 
   const pcp = member.member.pcpProviderId ? findProvider(member.member.pcpProviderId) ?? null : null;
 
@@ -653,7 +657,7 @@ export function getDemoProviderProfile(input: Record<string, unknown>): ToolResu
   }
 
   return ok(tool, {
-    memberId: memberId.value,
+    memberId,
     pcpAssigned: pcp !== null,
     pcp,
     providerDirectory,
