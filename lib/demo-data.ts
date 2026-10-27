@@ -270,6 +270,7 @@ export interface FormularyEntry {
 export const FORMULARY: FormularyEntry[] = [
   { drugName: "metformin", strength: "500mg", form: "tablet", tier: 1, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: null, specialtyRequired: false, covered: true },
   { drugName: "lisinopril", strength: "10mg", form: "tablet", tier: 1, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: null, specialtyRequired: false, covered: true },
+  { drugName: "losartan", strength: "50mg", form: "tablet", tier: 1, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: null, specialtyRequired: false, covered: true },
   { drugName: "atorvastatin", strength: "20mg", form: "tablet", tier: 1, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: null, specialtyRequired: false, covered: true },
   { drugName: "sertraline", strength: "50mg", form: "tablet", tier: 2, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: "30 tablets / 30 days", specialtyRequired: false, covered: true },
   { drugName: "albuterol", strength: "90mcg", form: "inhaler", tier: 2, priorAuthorizationRequired: false, stepTherapyRequired: false, quantityLimit: "1 inhaler / 30 days", specialtyRequired: false, covered: true },
