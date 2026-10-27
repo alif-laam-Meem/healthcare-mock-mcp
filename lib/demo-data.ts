@@ -326,9 +326,12 @@ export const PRESCRIPTION_REJECTIONS: Record<
 // Lookup helpers
 // ---------------------------------------------------------------------------
 // Normalizes memberId before matching so voice-channel transcription quirks
-// (e.g. speech-to-text hearing "M1003" as "M 1003", or stray casing) still
-// resolve to the right account instead of a false member_not_found.
-export const normalizeMemberId = (memberId: string) => memberId.replace(/\s+/g, "").toUpperCase();
+// (e.g. speech-to-text hearing "M1003" as "M 1003" or "M-1003", or stray
+// casing) still resolve to the right account instead of a false
+// member_not_found. Valid memberIds are always plain alphanumeric (M +
+// digits, no separators), so stripping any non-alphanumeric character is
+// safe — it can only remove noise, never change which member is meant.
+export const normalizeMemberId = (memberId: string) => memberId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
 export const findMember = (memberId: string) => {
   const normalized = normalizeMemberId(memberId);
